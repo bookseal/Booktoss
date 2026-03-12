@@ -26,6 +26,7 @@ load_dotenv()
 
 KAKAO_REST_KEY = os.getenv("KAKAO_REST_KEY")
 KAKAO_API_KEY = os.getenv("KAKAO_API_KEY")
+GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
 HEADERS = {"Authorization": f"KakaoAK {KAKAO_REST_KEY}"}
 ALLOWED_REGION_TO_PLACE = {
             "강남구": "gangnam",
@@ -383,23 +384,31 @@ def parse_jsonl(jsonl_text: str) -> List[Dict]:
 
 
 def get_coordinates(address: str) -> Optional[Tuple[float, float, str]]:
-    """주소를 좌표로 변환 (Nominatim OSM)"""
+    """주소를 좌표로 변환 (Google Geocoding API)"""
+    if not GOOGLE_MAPS_API_KEY:
+        st.error("GOOGLE_MAPS_API_KEY 환경변수가 설정되지 않았습니다.")
+        return None
+        
     try:
-        url = "https://nominatim.openstreetmap.org/search"
-        headers = {"User-Agent": "Booktoss-Streamlit-App/1.0"}
-        params = {"q": address, "format": "json"}
-        response = requests.get(url, headers=headers, params=params, timeout=TIMEOUT)
+        url = "https://maps.googleapis.com/maps/api/geocode/json"
+        params = {
+            "address": address,
+            "key": GOOGLE_MAPS_API_KEY,
+            "language": "ko"
+        }
+        response = requests.get(url, params=params, timeout=TIMEOUT)
         response.raise_for_status()
         
         data = response.json()
-        if not data:
+        if data.get("status") != "OK" or not data.get("results"):
             return None
             
-        doc = data[0]
-        lng = float(doc["lon"])
-        lat = float(doc["lat"])
+        doc = data["results"][0]
+        location = doc["geometry"]["location"]
+        lng = float(location["lng"])
+        lat = float(location["lat"])
         
-        display_name = doc.get("display_name", "")
+        display_name = doc.get("formatted_address", "")
         region = ""
         if "강남구" in display_name:
             region = "강남구"
@@ -535,9 +544,18 @@ def process_book_results(
     return map_libraries, available_library_coords, unavailable_library_coords, first_cover_image
 
 def route_points(start_lng, start_lat, end_lng, end_lat):
-    """OSRM 라우팅 API로 이동 경로 및 소요 시간/거리 조회"""
-    url = f"http://router.project-osrm.org/route/v1/driving/{start_lng},{start_lat};{end_lng},{end_lat}"
-    params = {"overview": "full", "geometries": "geojson"}
+    """Google Directions API로 이동 경로 및 소요 시간/거리 조회 (자동차 기준)"""
+    if not GOOGLE_MAPS_API_KEY:
+        return None
+
+    url = "https://maps.googleapis.com/maps/api/directions/json"
+    params = {
+        "origin": f"{start_lat},{start_lng}",
+        "destination": f"{end_lat},{end_lng}",
+        "mode": "driving",
+        "language": "ko",
+        "key": GOOGLE_MAPS_API_KEY
+    }
 
     def _show_route_warning():
         if not st.session_state.get("_route_warning_shown"):
@@ -553,31 +571,51 @@ def route_points(start_lng, start_lat, end_lng, end_lat):
         return None
 
     data = res.json()
-    if data.get("code") != "Ok":
+    if data.get("status") != "OK" or not data.get("routes"):
         _show_route_warning()
         return None
 
-    routes = data.get("routes", [])
-    if not routes:
-        _show_route_warning()
-        return None
-
-    route = routes[0]
+    route = data["routes"][0]
+    leg = route["legs"][0]
     
-    # OSRM geojson 경로 형태: [[lng, lat], [lng, lat], ...]
-    coords = route.get("geometry", {}).get("coordinates", [])
+    # encoded polyline for the entire route
+    overview_polyline = route.get("overview_polyline", {}).get("points", "")
+    polyline_points = None
     
-    if not coords:
-        _show_route_warning()
-        return None
+    if overview_polyline:
+        # Decode google encoded polyline into list of [lat, lng]
+        # Using a simple decoder inline
+        def decode_polyline(polyline_str):
+            index, lat, lng = 0, 0, 0
+            coordinates = []
+            changes = {'latitude': 0, 'longitude': 0}
+            while index < len(polyline_str):
+                for unit in ['latitude', 'longitude']:
+                    shift, result = 0, 0
+                    while True:
+                        byte = ord(polyline_str[index]) - 63
+                        index += 1
+                        result |= (byte & 0x1f) << shift
+                        shift += 5
+                        if not byte >= 0x20:
+                            break
+                    if (result & 1):
+                        changes[unit] += ~(result >> 1)
+                    else:
+                        changes[unit] += (result >> 1)
+                lat += changes['latitude']
+                lng += changes['longitude']
+                coordinates.append([lat / 100000.0, lng / 100000.0])
+            return coordinates
+            
+        coords = decode_polyline(overview_polyline)
+        # JS expects format like: [{lat: ..., lng: ...}, ...] or array of arrays
+        # Google Maps JS API Polyline path takes array of {lat, lng} objects:
+        polyline_points = ",\n".join([f"{{lat: {lat}, lng: {lng}}}" for lat, lng in coords])
 
-    # Leaflet 라인 형태는 [lat, lng]가 필요하므로 순서를 바꿈
-    polyline_points = ",\n".join(
-        [f"[{y}, {x}]" for x, y in coords]
-    )
-
-    duration = route.get("duration")
-    distance = route.get("distance")
+    # duration in seconds, distance in meters
+    duration = leg.get("duration", {}).get("value")
+    distance = leg.get("distance", {}).get("value")
 
     return polyline_points, duration, distance
 
