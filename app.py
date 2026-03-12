@@ -988,6 +988,12 @@ if ("address" in st.session_state and "book_name" in st.session_state and
                     if jsonl_path and os.path.exists(jsonl_path):
                         with open(jsonl_path, "r", encoding="utf-8") as f:
                             jsonl_data = f.read()
+                        # 파싱 결과가 0건이면 검색 실패 처리
+                        if not jsonl_data.strip():
+                            _write_trace("app.py", "jsonl_check", "error", "JSONL empty — 0 books parsed from HTML")
+                            status.update(label="⚠️ 파싱 결과 없음", state="error")
+                            stop_event = ("warning", "⚠️ 도서관 사이트에서 HTML을 가져왔지만 도서 정보를 추출하지 못했습니다. 검색어를 다시 확인해주세요.")
+                            show_search_btn = True
                     else:
                         status.update(label="❌ Search failed", state="error")
                         stop_event = ("error", "❌ 도서관 검색에 실패했습니다. 다시 시도해주세요.")
