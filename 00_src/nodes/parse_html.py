@@ -47,6 +47,9 @@ STATUS_KEYWORDS = [
     "반납예정일", "상호대차", "비치중"
 ]
 
+# 반납예정일 패턴 (예: "반납예정일 : 2026-01-15", "반납예정일: 2026.01.15")
+RETURN_DATE_PAT = re.compile(r"반납예정일\s*[:：]?\s*(\d{4}[-./]\d{1,2}[-./]\d{1,2})")
+
 LIBRARY_HINTS = [
     "도서관", "작은도서관", "분관", "자료관"
 ]
@@ -366,6 +369,27 @@ def _extract_library(block) -> Optional[str]:
     # 도서관 후보
     return _pick_library(parts)
 
+def _extract_return_date(block) -> Optional[str]:
+    """
+    반납예정일 추출
+    """
+    # block과 부모 요소 모두에서 검색
+    search_areas = [block]
+    if block.parent and block.parent.name != '[document]':
+        search_areas.append(block.parent)
+    
+    for area in search_areas:
+        text = _clean(area.get_text(" "))
+        m = RETURN_DATE_PAT.search(text)
+        if m:
+            date_str = m.group(1)
+            # 날짜 형식 통일 (YYYY-MM-DD)
+            date_str = date_str.replace(".", "-").replace("/", "-")
+            return date_str
+    
+    return None
+
+
 def _extract_cover_image(block) -> Optional[str]:
     """
     책 표지 이미지 URL 추출 (강남, 송파, 서초 모두 지원)
@@ -410,6 +434,7 @@ def _parse_item_block(block) -> Optional[Dict[str, Any]]:
     author = _extract_author(block)
     call_number = _extract_call_number(block)
     cover_image = _extract_cover_image(block)
+    return_date = _extract_return_date(block)
 
     # library 값 정제: "도서관: 글빛도서관" → "글빛도서관"
     if library:
@@ -428,8 +453,10 @@ def _parse_item_block(block) -> Optional[Dict[str, Any]]:
         "author": author,
         "library": library,
         "available": available,
+        "status": status,  # 원본 상태 텍스트 추가
         "call_number": call_number,
         "cover_image": cover_image,
+        "return_date": return_date,  # 반납예정일 추가
     }
 
 def _find_item_blocks(soup: BeautifulSoup) -> List[Any]:

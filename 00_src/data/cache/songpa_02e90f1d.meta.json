@@ -1,0 +1,10 @@
+{
+  "place": "songpa",
+  "title": "어린 왕자",
+  "title_hash": "02e90f1d",
+  "created_at": "2026-01-08T23:47:21",
+  "source_path": "00_src/data/parsed/2026-01-08/songpa_results.jsonl",
+  "cached_path": "00_src/data/cache/songpa_02e90f1d.jsonl",
+  "search_time": "2026-01-08T23:47:21",
+  "result_count": 89
+}

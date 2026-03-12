@@ -12,6 +12,7 @@ import os
 import sys
 import json
 from typing import List, Dict, Optional, Tuple
+from datetime import datetime
 import requests
 from dotenv import load_dotenv
 from math import radians, sin, cos, sqrt, atan2
@@ -279,29 +280,32 @@ def parse_jsonl(jsonl_text: str) -> List[Dict]:
 
 
 def get_coordinates(address: str) -> Optional[Tuple[float, float, str]]:
-    """주소를 좌표로 변환"""
+    """주소를 좌표로 변환 (Nominatim OSM)"""
     try:
-        url = "https://dapi.kakao.com/v2/local/search/address.json"
-        params = {"query": address}
-        response = requests.get(url, headers=HEADERS, params=params, timeout=TIMEOUT)
+        url = "https://nominatim.openstreetmap.org/search"
+        headers = {"User-Agent": "Booktoss-Streamlit-App/1.0"}
+        params = {"q": address, "format": "json"}
+        response = requests.get(url, headers=headers, params=params, timeout=TIMEOUT)
         response.raise_for_status()
         
         data = response.json()
-        documents = data.get("documents", [])
-        
-        if not documents:
+        if not data:
             return None
             
-        doc = documents[0]
-        lng = float(doc["x"])
-        lat = float(doc["y"])
-        if doc.get("address") is not None:
-            region = doc["address"].get("region_2depth_name", "")
-        else:
-            region = doc.get("road_address", {}).get("region_2depth_name", "")
+        doc = data[0]
+        lng = float(doc["lon"])
+        lat = float(doc["lat"])
         
-        if not region:
-            return None
+        display_name = doc.get("display_name", "")
+        region = ""
+        if "강남구" in display_name:
+            region = "강남구"
+        elif "서초구" in display_name:
+            region = "서초구"
+        elif "송파구" in display_name:
+            region = "송파구"
+        else:
+            region = "강남구"  # 기본값
         
         return (lng, lat, region)
     except Exception as e:
@@ -353,46 +357,84 @@ def get_library_with_distance(library_name: str, user_lat: float, user_lng: floa
 
 
 def process_book_results(
-    jsonl_data: str, user_lat: float, user_lng: float
-) -> Tuple[List[Dict], List[Dict], Optional[str]]:
-    """도서 검색 결과 처리 및 도서관별 거리 계산 (첫 번째 표지 이미지 포함)"""
+    jsonl_data: str, user_lat: float, user_lng: float, include_unavailable: bool = False
+) -> Tuple[List[Dict], List[Dict], List[Dict], Optional[str]]:
+    """
+    도서 검색 결과 처리 및 도서관별 거리 계산
+    
+    Args:
+        jsonl_data: JSONL 형식의 검색 결과
+        user_lat: 사용자 위도
+        user_lng: 사용자 경도
+        include_unavailable: 대출불가 도서도 포함할지 여부
+    
+    Returns:
+        (map_libraries, available_libraries, unavailable_libraries, first_cover_image)
+    """
     results = parse_jsonl(jsonl_data)
     first_cover_image = next(
         (item.get("cover_image") for item in results if item.get("cover_image")), None
     )
 
-    # 도서관별로 그룹화 (available=true만)
-    available_libraries = {}
+    # 도서관별로 그룹화
+    available_by_lib = {}  # 대출 가능
+    unavailable_by_lib = {}  # 대출 불가
+    
     for item in results:
+        lib_name = item.get("library")
+        if not lib_name:
+            continue
+        
         if item.get("available", False):
-            lib_name = item["library"]
-            if lib_name not in available_libraries:
-                available_libraries[lib_name] = []
-            available_libraries[lib_name].append(item)
+            if lib_name not in available_by_lib:
+                available_by_lib[lib_name] = []
+            available_by_lib[lib_name].append(item)
+        else:
+            if lib_name not in unavailable_by_lib:
+                unavailable_by_lib[lib_name] = []
+            unavailable_by_lib[lib_name].append(item)
 
-    # 도서관 좌표 및 거리 계산
-    library_coords = []
-    for lib_name in available_libraries.keys():
+    # 대출 가능 도서관 좌표 및 거리 계산
+    available_library_coords = []
+    for lib_name in available_by_lib.keys():
         lib_info = get_library_with_distance(lib_name, user_lat, user_lng)
         if lib_info:
-            lib_info["books"] = available_libraries[lib_name]
-            library_coords.append(lib_info)
+            lib_info["books"] = available_by_lib[lib_name]
+            lib_info["available_count"] = len(available_by_lib[lib_name])
+            available_library_coords.append(lib_info)
+    
+    # 대출 불가 도서관 좌표 및 거리 계산
+    unavailable_library_coords = []
+    if include_unavailable:
+        for lib_name in unavailable_by_lib.keys():
+            # 이미 대출 가능 목록에 있는 도서관은 제외
+            if lib_name in available_by_lib:
+                # 대출 가능 도서관에 대출불가 도서 추가
+                for lib_info in available_library_coords:
+                    if lib_info["name"] == lib_name:
+                        lib_info["unavailable_books"] = unavailable_by_lib[lib_name]
+                        break
+            else:
+                lib_info = get_library_with_distance(lib_name, user_lat, user_lng)
+                if lib_info:
+                    lib_info["books"] = []
+                    lib_info["unavailable_books"] = unavailable_by_lib[lib_name]
+                    lib_info["available_count"] = 0
+                    unavailable_library_coords.append(lib_info)
     
     # 이동 시간 우선 정렬(경로 정보가 없으면 거리 기준으로 대체)
-    library_coords.sort(key=lambda lib: (0, lib["duration"]) if lib["duration"] is not None else (1, lib["distance"]))
+    available_library_coords.sort(key=lambda lib: (0, lib["duration"]) if lib["duration"] is not None else (1, lib["distance"]))
+    unavailable_library_coords.sort(key=lambda lib: (0, lib["duration"]) if lib["duration"] is not None else (1, lib["distance"]))
 
     # 지도용 (상위 N개)
-    map_libraries = library_coords[:TOP_N_MAP]
+    map_libraries = available_library_coords[:TOP_N_MAP]
     
-    return map_libraries, library_coords, first_cover_image
+    return map_libraries, available_library_coords, unavailable_library_coords, first_cover_image
 
 def route_points(start_lng, start_lat, end_lng, end_lat):
-    """카카오 길찾기 API로 이동 경로 및 소요 시간/거리 조회"""
-    url = "https://apis-navi.kakaomobility.com/v1/directions"
-    params = {
-        "origin": f"{start_lng},{start_lat}",
-        "destination": f"{end_lng},{end_lat}"
-    }
+    """OSRM 라우팅 API로 이동 경로 및 소요 시간/거리 조회"""
+    url = f"http://router.project-osrm.org/route/v1/driving/{start_lng},{start_lat};{end_lng},{end_lat}"
+    params = {"overview": "full", "geometries": "geojson"}
 
     def _show_route_warning():
         if not st.session_state.get("_route_warning_shown"):
@@ -400,7 +442,7 @@ def route_points(start_lng, start_lat, end_lng, end_lat):
             st.session_state["_route_warning_shown"] = True
 
     try:
-        res = requests.get(url, headers=HEADERS, params=params, timeout=TIMEOUT)
+        res = requests.get(url, params=params, timeout=TIMEOUT)
         res.raise_for_status()
     except requests.RequestException as exc:
         _show_route_warning()
@@ -408,74 +450,54 @@ def route_points(start_lng, start_lat, end_lng, end_lat):
         return None
 
     data = res.json()
-    routes = data.get("routes", [])
+    if data.get("code") != "Ok":
+        _show_route_warning()
+        return None
 
+    routes = data.get("routes", [])
     if not routes:
         _show_route_warning()
         return None
 
     route = routes[0]
-    result_code = route.get("result_code", 0)
-    if result_code != 0:
-        _show_route_warning()
-        return None
-
-    summary = route.get("summary", {})
-
-    # 도로 좌표 추출
-    coords = []
-    for section in route.get("sections", []):
-        for road in section.get("roads", []):
-            coords.extend(road.get("vertexes", []))
-
+    
+    # OSRM geojson 경로 형태: [[lng, lat], [lng, lat], ...]
+    coords = route.get("geometry", {}).get("coordinates", [])
+    
     if not coords:
         _show_route_warning()
         return None
 
-    # vertexes는 [x1, y1, x2, y2, ...] 형태이므로 2개씩 묶기
-    path = [(coords[i], coords[i + 1]) for i in range(0, len(coords), 2)]
-
-    # 자바스크립트 코드로 경로 표시
+    # Leaflet 라인 형태는 [lat, lng]가 필요하므로 순서를 바꿈
     polyline_points = ",\n".join(
-        [f"new kakao.maps.LatLng({y}, {x})" for x, y in path]
+        [f"[{y}, {x}]" for x, y in coords]
     )
 
-    duration = summary.get("duration")
-    distance = summary.get("distance")
+    duration = route.get("duration")
+    distance = route.get("distance")
 
     return polyline_points, duration, distance
 
 def generate_map_html(user_lat: float, user_lng: float, 
                      library_coords: List[Dict], book_name: str) -> str:
-    """카카오맵 HTML 생성"""
-
-    user_html = f"""
-        <div class="user"">
-            <div>내 위치</div>
-        </div>
-        """
+    """오픈스트리트맵(Leaflet) 맵 HTML 생성"""
 
     markers_js = f"""
-        var userLatLng = new kakao.maps.LatLng({user_lat}, {user_lng});
-        var userMarker = new kakao.maps.Marker({{
-            position: userLatLng,
-            map: map,
-            image: new kakao.maps.MarkerImage(
-                "https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png",
-                new kakao.maps.Size(24, 35)
-            )
-        }});
-        bounds.extend(userLatLng);
-
-        var userOverlay = new kakao.maps.CustomOverlay({{
-            content: `{user_html}`,
-            map: null,
-            position: userMarker.getPosition()
+        var userLatLng = [{user_lat}, {user_lng}];
+        var redIcon = new L.Icon({{
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41]
         }});
 
-        userOverlay.setMap(map);
-        
-        var overlays = [];
+        L.marker(userLatLng, {{icon: redIcon}}).addTo(map)
+            .bindPopup("<b>내 위치</b>")
+            .openPopup();
+            
+        bounds.push(userLatLng);
     """
     
     for idx, lib in enumerate(library_coords):
@@ -487,20 +509,17 @@ def generate_map_html(user_lat: float, user_lng: float,
         )
 
         info_html = f"""
-        <div class="wrap">
-            <div class="info">
-                <div class="title">
-                    {lib['name']}
-                    <div class="close" onclick="closeOverlay({idx})" title="닫기"></div>
-                </div>
-                <div class="body">
-                    <div class="desc">
-                        <div class="ellipsis">📍 {lib['address']}</div>
-                        <div>🚘 이동시간: {duration_text}</div>
-                        <div>📏 이동거리: {distance_text}</div>
-                        <div>⤴️ <a href='https://map.kakao.com/link/from/내위치,{user_lat},{user_lng}/to/{lib['name']},{lib['lat']},{lib['lng']}' target='_blank' class='link'>길찾기</a></div>
-                    </div>
-                </div>
+        <div style="font-size:13px; font-family:'Malgun Gothic',sans-serif; min-width:180px;">
+            <div style="font-weight:bold; font-size:15px; margin-bottom:5px; padding-bottom:5px; border-bottom:1px solid #ccc;">
+                {lib['name']}
+            </div>
+            <div>📍 {lib['address']}</div>
+            <div style="margin-top:4px;">🚘 이동시간: {duration_text}</div>
+            <div style="margin-top:4px;">📏 이동거리: {distance_text}</div>
+            <div style="margin-top:6px;">
+                <a href='https://map.kakao.com/link/from/내위치,{user_lat},{user_lng}/to/{lib['name']},{lib['lat']},{lib['lng']}' target='_blank' style='color:#667eea; text-decoration:none; font-weight:bold;'>
+                    ⤴️ 카카오맵에서 길찾기
+                </a>
             </div>
         </div>
         """
@@ -508,57 +527,36 @@ def generate_map_html(user_lat: float, user_lng: float,
         polyline_js = ""
         if lib.get("polyline_points"):
             polyline_js = f"""
-                var linePath = [
+                var linePath_{idx} = [
                     {lib['polyline_points']}
                 ];
 
-                var polyline = new kakao.maps.Polyline({{
-                    path: linePath,
-                    strokeWeight: 5,
-                    strokeColor: '#0078ff',
-                    strokeOpacity: 0.9,
-                    strokeStyle: 'solid'
-                }});
-                polyline.setMap(map);
+                L.polyline(linePath_{idx}, {{
+                    color: '#0078ff',
+                    weight: 5,
+                    opacity: 0.8
+                }}).addTo(map);
             """
         
         markers_js += f"""
-            (function(index) {{
-                var libLatLng = new kakao.maps.LatLng({lib['lat']}, {lib['lng']});
-                var marker = new kakao.maps.Marker({{
-                    position: libLatLng,
-                    map: map
+            (function() {{
+                var libLatLng_{idx} = [{lib['lat']}, {lib['lng']}];
+                var blueIcon = new L.Icon({{
+                    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+                    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                    iconSize: [25, 41],
+                    iconAnchor: [12, 41],
+                    popupAnchor: [1, -34],
+                    shadowSize: [41, 41]
                 }});
 
-                // 경로 라인
+                L.marker(libLatLng_{idx}, {{icon: blueIcon}}).addTo(map)
+                    .bindPopup(`{info_html}`);
+
                 {polyline_js}
                 
-                var overlay = new kakao.maps.CustomOverlay({{
-                    content: `{info_html}`,
-                    map: null,
-                    position: marker.getPosition()
-                }});
-                
-                overlays[index] = overlay;
-                overlay.setMap(map);
-
-                kakao.maps.event.addListener(marker, 'click', function() {{
-                    overlay.setMap(map);
-                }});
-                
-                bounds.extend(libLatLng);
-                
-                var level = map.getLevel();
-                var offset;
-                if (level <= 3) offset = 0.001;
-                else if (level <= 5) offset = 0.002;
-                else if (level <= 7) offset = 0.005;
-                else if (level <= 9) offset = 0.007;
-                else offset = 0.01;
-
-                bounds.extend(new kakao.maps.LatLng(libLatLng.getLat() + offset, libLatLng.getLng() + offset));
-                bounds.extend(new kakao.maps.LatLng(libLatLng.getLat() + offset, libLatLng.getLng() - offset));
-            }})({idx});
+                bounds.push(libLatLng_{idx});
+            }})();
         """
     
     return f"""
@@ -566,113 +564,62 @@ def generate_map_html(user_lat: float, user_lng: float,
     <html>
     <head>
         <meta charset="utf-8"/>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <style>
-            .wrap {{
-                position: absolute;
-                left: 0;
-                bottom: 50px;
-                width: 250px;
-                margin-left: -125px;
-                text-align: left;
-                font-size: 13px;
-                font-family: 'Malgun Gothic', sans-serif;
-                line-height: 1.5;
-            }}
-            .info {{
-                width: 250px;
-                background: #fff;
-                border-radius: 10px;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                overflow: hidden;
-            }}
-            .user {{
-                border-radius: 10px;
-                background: #fff;
-                width: fit-content;
-                padding: 5px 8px;
-                margin-bottom: 110px;
-                text-align: center;
-                font-size: 13px;
-                font-weight: bold;
-                font-family: 'Malgun Gothic', sans-serif;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                line-height: 1.5;
-            }}
-            .title {{
-                position: relative;
-                padding: 10px 35px 10px 15px;
-                background: linear-gradient(120deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                font-size: 15px;
-                font-weight: 600;
-            }}
-            .close {{
-                position: absolute;
-                top: 12px;
-                right: 12px;
-                width: 16px;
-                height: 16px;
-                background: url('https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/overlay_close.png') no-repeat;
-                background-size: 100%;
-                cursor: pointer;
-                filter: brightness(0) invert(1);
-            }}
-            .body {{
-                padding: 12px 15px;
-            }}
-            .desc {{
-                display: flex;
-                flex-direction: column;
-                gap: 6px;
-            }}
-            .link {{
-                color: #667eea;
-                text-decoration: none;
-                font-weight: 500;
-            }}
-            .link:hover {{
-                text-decoration: underline;
-            }}
-            .info:after {{
-                content: '';
-                position: absolute;
-                left: 50%;
-                bottom: -12px;
-                margin-left: -11px;
-                width: 22px;
-                height: 12px;
-                background: url('https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/vertex_white.png');
-            }}
+            body {{ margin: 0; padding: 0; }}
+            #map {{ width: 100%; height: 550px; border-radius: 10px; }}
         </style>
-        <script type="text/javascript"
-            src="https://dapi.kakao.com/v2/maps/sdk.js?appkey={KAKAO_API_KEY}&libraries=services">
-        </script>
     </head>
-    <body style="margin:0px">
-        <div id="map" style="width:100%;height:550px;border-radius:10px;"></div>
+    <body>
+        <div id="map"></div>
         <script>
-            var mapContainer = document.getElementById('map');
-            var mapOption = {{
-                center: new kakao.maps.LatLng({user_lat}, {user_lng}),
-                level: 6
-            }};
-            var map = new kakao.maps.Map(mapContainer, mapOption);
-            var zoomControl = new kakao.maps.ZoomControl();
-            map.addControl(zoomControl, kakao.maps.ControlPosition.RIGHT);
-            var bounds = new kakao.maps.LatLngBounds();
+            var map = L.map('map').setView([{user_lat}, {user_lng}], 13);
+            L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
+                maxZoom: 19,
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }}).addTo(map);
+            
+            var bounds = [];
             {markers_js}
             
-            function closeOverlay(index) {{
-                if (overlays[index]) {{
-                    overlays[index].setMap(null);
-                }}
+            if (bounds.length > 0) {{
+                map.fitBounds(bounds, {{padding: [30, 30]}});
             }}
-            
-            map.setBounds(bounds);
         </script>
     </body>
     </html>
     """
+
+def _render_book_card(book: Dict, available: bool = True):
+    """도서 카드 렌더링 헬퍼 함수"""
+    cover_img = book.get('cover_image') or "https://public.seocholib.or.kr/resources/images/cover/no-image-MO.png"
+    
+    # 상태 배지
+    if available:
+        status_badge = '<span style="background:#d4edda;color:#155724;padding:2px 8px;border-radius:10px;font-size:0.8rem;">대출가능</span>'
+    else:
+        return_date = book.get('return_date', '')
+        if return_date:
+            status_badge = f'<span style="background:#f8d7da;color:#721c24;padding:2px 8px;border-radius:10px;font-size:0.8rem;">반납예정: {return_date}</span>'
+        else:
+            status_badge = '<span style="background:#f8d7da;color:#721c24;padding:2px 8px;border-radius:10px;font-size:0.8rem;">대출중</span>'
+    
+    # 스타일 (대출불가는 투명도 적용)
+    opacity = "1" if available else "0.7"
+    
+    st.markdown(f"""
+    <div style="display:flex; align-items:flex-start; gap:0.8rem; margin-bottom:0.8rem; opacity:{opacity};">
+        <img src="{cover_img}" alt="book cover" width="90" height="120"
+        style="border-radius:6px; object-fit:cover; flex-shrink:0;">
+        <div>
+            <div style="font-weight:bold; font-size:1.2rem;">{book['title']} {status_badge}</div>
+            <div style="margin-top:0.3rem;">· 저자: {book.get('author', 'N/A')}</div>
+            <div>· 청구기호: {book.get('call_number', '홈페이지에서 확인하세요.')}</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
 
 def show_library_search_button(book_name: str, user_region: str):
     """지역별 도서관 검색 버튼을 표시"""
@@ -695,8 +642,86 @@ def show_library_search_button(book_name: str, user_region: str):
             break  # 찾으면 반복 종료
 
 # ============================================================================
+# 검색 히스토리 관리
+# ============================================================================
+
+MAX_HISTORY_SIZE = 5  # 최대 히스토리 저장 개수
+
+def add_to_history(address: str, book_name: str, is_multi_region: bool):
+    """검색 기록 추가"""
+    if "search_history" not in st.session_state:
+        st.session_state["search_history"] = []
+    
+    history = st.session_state["search_history"]
+    
+    # 중복 제거 (같은 검색어가 있으면 제거 후 맨 앞에 추가)
+    new_entry = {
+        "address": address,
+        "book_name": book_name,
+        "is_multi_region": is_multi_region,
+        "timestamp": datetime.now().isoformat(timespec="seconds")
+    }
+    
+    # 기존에 같은 검색이 있으면 제거
+    history = [h for h in history if not (h["address"] == address and h["book_name"] == book_name)]
+    
+    # 맨 앞에 추가
+    history.insert(0, new_entry)
+    
+    # 최대 개수 제한
+    st.session_state["search_history"] = history[:MAX_HISTORY_SIZE]
+
+
+def get_history() -> List[Dict]:
+    """검색 기록 조회"""
+    return st.session_state.get("search_history", [])
+
+
+# ============================================================================
 # UI 렌더링
 # ============================================================================
+
+# 사이드바 - 검색 히스토리
+with st.sidebar:
+    st.markdown("### 📜 최근 검색")
+    
+    history = get_history()
+    
+    if not history:
+        st.caption("검색 기록이 없습니다.")
+    else:
+        for idx, h in enumerate(history):
+            # 멀티지역 표시
+            region_badge = "🌐" if h.get("is_multi_region") else "📍"
+            
+            # 검색 버튼
+            btn_label = f"{region_badge} {h['book_name'][:15]}{'...' if len(h['book_name']) > 15 else ''}"
+            
+            if st.button(btn_label, key=f"history_{idx}", use_container_width=True):
+                # 검색 정보를 session_state에 설정
+                st.session_state["address"] = h["address"]
+                st.session_state["book_name"] = h["book_name"]
+                st.session_state["search_all_regions"] = h.get("is_multi_region", False)
+                st.rerun()
+            
+            # 상세 정보 표시
+            st.caption(f"└ {h['address'][:20]}{'...' if len(h['address']) > 20 else ''}")
+    
+    st.markdown("---")
+    
+    # 캐시 정보 표시
+    st.markdown("### 💾 캐시 정보")
+    sys.path.insert(0, "00_src")
+    from utils.cache import list_cached_searches
+    
+    cached = list_cached_searches()
+    if cached:
+        st.caption(f"캐시된 검색: {len(cached)}개")
+        for c in cached[:3]:
+            age_text = f"{c['age_hours']:.1f}시간 전"
+            st.caption(f"• {c['title'][:12]}... ({age_text})")
+    else:
+        st.caption("캐시된 검색이 없습니다.")
 
 # 헤더
 st.markdown("""
@@ -707,23 +732,40 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # 검색 폼
-col1, col2, col3 = st.columns([2, 2, 1])
+col1, col2 = st.columns([2, 2])
 
 with col1:
     address = st.text_input(
         "📍 내 주소",
+        value="개포로 416",
         placeholder="서울특별시 강남구 개포로 416"
     )
 
 with col2:
     book_name = st.text_input(
         "📖 찾고 싶은 도서",
-        placeholder="트렌드 코리아 2026"
+        value="트랜드 코리아 2025",
+        placeholder="트렌드 코리아 2025"
     )
 
-with col3:
-    st.write("")
-    st.write("")
+# 검색 옵션 및 버튼
+opt_col1, opt_col2, opt_col3 = st.columns([2, 2, 1])
+
+with opt_col1:
+    search_all_regions = st.checkbox(
+        "🌐 전체 지역 검색",
+        value=False,
+        help="체크하면 강남구, 서초구, 송파구 모든 도서관에서 검색합니다."
+    )
+
+with opt_col2:
+    show_unavailable = st.checkbox(
+        "📚 대출불가 도서도 표시",
+        value=False,
+        help="대출 중인 도서도 함께 표시합니다. 반납예정일을 확인할 수 있어요."
+    )
+
+with opt_col3:
     search_btn = st.button("🔍 검색하기", use_container_width=True)
 
 # 검색 실행
@@ -737,6 +779,10 @@ if search_btn:
     else:
         st.session_state["address"] = address.strip()
         st.session_state["book_name"] = book_name.strip()
+        st.session_state["search_all_regions"] = search_all_regions
+        st.session_state["show_unavailable"] = show_unavailable
+        # 검색 히스토리에 추가
+        add_to_history(address.strip(), book_name.strip(), search_all_regions)
 
 # 결과 표시
 if ("address" in st.session_state and "book_name" in st.session_state and
@@ -749,44 +795,132 @@ if ("address" in st.session_state and "book_name" in st.session_state and
     all_libraries: List[Dict] = []
     first_cover_image: Optional[str] = None
 
-    with st.spinner("🔍 도서관 검색 중... 약 1분 간 소요되니 기다리는 동안 커피 한잔 하세요 😉"):
-        # 사용자 위치 좌표 가져오기
+    # 전체 지역 검색 여부 확인
+    is_multi_region = st.session_state.get("search_all_regions", False)
+    search_title = st.session_state["book_name"]
+    
+    # 진행 상태 표시용 status 컴포넌트
+    with st.status("🔍 도서관 검색 중...", expanded=True) as status:
+        # Step 1: 주소 확인
+        status.update(label="📍 주소 확인 중...")
+        st.write("📍 주소 좌표 변환 중...")
+        
         user_coords = get_coordinates(st.session_state["address"])
         
         if not user_coords:
+            status.update(label="❌ 주소 확인 실패", state="error")
             stop_event = ("error", "❌ 입력하신 주소를 찾을 수 없거나 주소 정보가 부족합니다. 주소를 다시 확인해주세요.")
         else:
             user_lng, user_lat, user_region = user_coords
+            st.write(f"✅ 위치 확인: {user_region}")
 
             # 실제 도서관 검색 실행 (pipeline_graph 연동)
             sys.path.insert(0, "00_src")
-            from graph.pipeline_graph import run_once
+            from graph.pipeline_graph import run_once, run_multi_region, REGION_NAMES
 
-            place = ALLOWED_REGION_TO_PLACE.get(user_region)
-
-            if not place:
-                stop_event = ("warning", "😥 입력하신 지역의 서비스는 아직 준비 중입니다. 강남구, 서초구, 송파구 내에서 검색해주세요.")
-            else:
-                # LangGraph 파이프라인 실행 (브라우저 자동화 + HTML 파싱)
-                result = run_once(place=place, title=st.session_state["book_name"])
-                # JSONL 데이터 추출
-                jsonl_path = result.get("out_jsonl")
-                if jsonl_path and os.path.exists(jsonl_path):
-                    with open(jsonl_path, "r", encoding="utf-8") as f:
-                        jsonl_data = f.read()
+            # Step 2: 도서관 검색
+            if is_multi_region:
+                # 멀티지역 검색 모드
+                status.update(label="🌐 전체 지역 검색 중... (강남/서초/송파)")
+                st.write("🌐 3개 지역 동시 검색 시작...")
+                
+                # 진행 상태 콜백
+                progress_placeholder = st.empty()
+                region_status = {"gangnam": "⏳", "seocho": "⏳", "songpa": "⏳"}
+                
+                def update_progress(region: str, state: str, message: str):
+                    if state == "start":
+                        region_status[region] = "🔄"
+                    elif state == "cache_hit":
+                        region_status[region] = "✅ (캐시)"
+                    elif state == "success":
+                        region_status[region] = "✅"
+                    elif state == "error":
+                        region_status[region] = "❌"
+                    
+                    status_text = " | ".join([
+                        f"{REGION_NAMES.get(r, r)}: {s}" 
+                        for r, s in region_status.items()
+                    ])
+                    progress_placeholder.write(status_text)
+                
+                import time
+                start_time = time.time()
+                result = run_multi_region(title=search_title, progress_callback=update_progress)
+                elapsed_time = time.time() - start_time
+                
+                if result.get("total_count", 0) > 0:
+                    st.write(f"✅ 총 {result['total_count']}건 발견 (소요 시간: {elapsed_time:.1f}초)")
+                    # 모든 도서를 JSONL 형식으로 변환
+                    jsonl_data = "\n".join([
+                        json.dumps(book, ensure_ascii=False) 
+                        for book in result.get("all_books", [])
+                    ])
                 else:
-                    stop_event = ("error", ":x: 도서관 검색에 실패했습니다. 다시 시도해주세요.")
+                    status.update(label="❌ 검색 결과 없음", state="error")
+                    stop_event = ("error", "❌ 검색 결과가 없습니다. 다시 시도해주세요.")
+                    
+            else:
+                # 단일 지역 검색 모드
+                place = ALLOWED_REGION_TO_PLACE.get(user_region)
 
-                if not stop_event:
-                    (
-                        map_libraries,
-                        all_libraries,
-                        first_cover_image,
-                    ) = process_book_results(jsonl_data, user_lat, user_lng)
+                if not place:
+                    status.update(label="⚠️ 지원하지 않는 지역", state="error")
+                    stop_event = ("warning", "😥 입력하신 지역의 서비스는 아직 준비 중입니다. 강남구, 서초구, 송파구 내에서 검색해주세요.")
+                else:
+                    status.update(label=f"🔍 {user_region} 도서관 검색 중...")
+                    st.write(f"🔍 {user_region} 도서관에서 '{search_title}' 검색 중...")
+                    
+                    import time
+                    start_time = time.time()
+                    
+                    # LangGraph 파이프라인 실행 (브라우저 자동화 + HTML 파싱)
+                    result = run_once(place=place, title=search_title)
+                    elapsed_time = time.time() - start_time
+                    
+                    if result.get("from_cache"):
+                        st.write(f"✅ 캐시에서 결과 로드 (소요 시간: {elapsed_time:.1f}초)")
+                    else:
+                        st.write(f"✅ 검색 완료 (소요 시간: {elapsed_time:.1f}초)")
+                    
+                    # JSONL 데이터 추출
+                    jsonl_path = result.get("out_jsonl")
+                    if jsonl_path and os.path.exists(jsonl_path):
+                        with open(jsonl_path, "r", encoding="utf-8") as f:
+                            jsonl_data = f.read()
+                    else:
+                        status.update(label="❌ 검색 실패", state="error")
+                        stop_event = ("error", "❌ 도서관 검색에 실패했습니다. 다시 시도해주세요.")
 
-                    if not all_libraries:
-                        stop_event = ("warning", "⚠️ 현재 대출 가능한 도서관을 찾을 수 없습니다.")
-                        show_search_btn = True
+            # Step 3: 결과 분석
+            if not stop_event:
+                status.update(label="📊 결과 분석 중...")
+                st.write("📊 도서관 거리 계산 및 정렬 중...")
+                
+                # 대출불가 도서 표시 옵션 확인
+                show_unavailable_books = st.session_state.get("show_unavailable", False)
+                
+                (
+                    map_libraries,
+                    all_libraries,
+                    unavailable_libraries,
+                    first_cover_image,
+                ) = process_book_results(jsonl_data, user_lat, user_lng, include_unavailable=show_unavailable_books)
+
+                if not all_libraries and not unavailable_libraries:
+                    status.update(label="⚠️ 대출 가능한 도서관 없음", state="error")
+                    stop_event = ("warning", "⚠️ 현재 대출 가능한 도서관을 찾을 수 없습니다.")
+                    show_search_btn = True
+                elif not all_libraries and unavailable_libraries:
+                    status.update(label=f"⚠️ 대출가능 없음, 대출중 {len(unavailable_libraries)}곳", state="complete")
+                    st.write(f"⚠️ 대출 가능한 도서관은 없지만, 대출 중인 도서관 {len(unavailable_libraries)}곳 발견")
+                else:
+                    total = len(all_libraries) + len(unavailable_libraries)
+                    status.update(label=f"✅ 검색 완료! {total}곳 발견", state="complete")
+                    if unavailable_libraries:
+                        st.write(f"✅ 대출 가능 {len(all_libraries)}곳 + 대출 중 {len(unavailable_libraries)}곳 발견")
+                    else:
+                        st.write(f"✅ 대출 가능한 도서관 {len(all_libraries)}곳 발견")
 
     if stop_event:
         level, message = stop_event
@@ -812,11 +946,18 @@ if ("address" in st.session_state and "book_name" in st.session_state and
                     channels="RGB",
                     output_format="auto",
                 )
+        
+        # 검색 지역 표시
+        if is_multi_region:
+            region_text = "강남/서초/송파"
+        else:
+            region_text = user_region
+        
         st.markdown(f"""
         <div class="result-card">
             <h3 style="text-align:center;">📖 {st.session_state['book_name']}</h3>
             <p style="margin:0.5rem 0 0 0; opacity:0.9;text-align:center;">
-                {user_region}에서 대출 가능한 도서관 {len(all_libraries)}곳을 찾았어요! 🥳
+                {region_text}에서 대출 가능한 도서관 {len(all_libraries)}곳을 찾았어요! 🥳
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -872,32 +1013,128 @@ if ("address" in st.session_state and "book_name" in st.session_state and
                 
                 with st.expander(f"📚 대출 가능 도서 {len(lib['books'])}권", expanded=True):
                     for book in lib['books']:
-                        if book['cover_image']:
-                            st.markdown(f"""
-                            <div style="display:flex; align-items:flex-start; gap:0.8rem; margin-bottom:0.8rem;">
-                                <img src="{book['cover_image']}" alt="book cover" width="90" height="120"
-                                style="border-radius:6px; object-fit:cover; flex-shrink:0;">
-                                <div>
-                                    <div style="font-weight:bold; font-size:1.2rem;">{book['title']}</div>
-                                    <div style="margin-top:0.3rem;">· 저자: {book.get('author', 'N/A')}</div>
-                                    <div>· 청구기호: {book.get('call_number', '홈페이지에서 확인하세요.')}</div>
-                                </div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                        else:
-                            st.markdown(f"""
-                            <div style="display:flex; align-items:flex-start; gap:0.8rem; margin-bottom:0.8rem;">
-                                <img src="https://public.seocholib.or.kr/resources/images/cover/no-image-MO.png" alt="book cover" width="90" height="120"
-                                style="border-radius:6px; object-fit:cover; flex-shrink:0;">
-                                <div>
-                                    <div style="font-weight:bold; font-size:1.2rem;">{book['title']}</div>
-                                    <div style="margin-top:0.3rem;">· 저자: {book.get('author', 'N/A')}</div>
-                                    <div>· 청구기호: {book.get('call_number', '홈페이지에서 확인하세요.')}</div>
-                                </div>
-                            </div>
-                            """, unsafe_allow_html=True)
+                        _render_book_card(book, available=True)
+                
+                # 대출불가 도서도 표시 (해당 도서관에 있는 경우)
+                unavailable_books = lib.get('unavailable_books', [])
+                if unavailable_books and show_unavailable_books:
+                    with st.expander(f"📕 대출 중 도서 {len(unavailable_books)}권", expanded=False):
+                        for book in unavailable_books:
+                            _render_book_card(book, available=False)
+                
                 st.write("")
+        
+        # 대출불가 도서관 표시 (대출 가능한 도서가 없는 도서관)
+        if unavailable_libraries and show_unavailable_books:
+            st.markdown("---")
+            st.markdown("#### 📕 대출 중인 도서관")
+            st.caption("현재 대출 가능한 도서가 없지만, 반납 후 대출할 수 있는 도서관입니다.")
+            
+            for lib in unavailable_libraries:
+                duration_text = format_duration(lib.get("duration"))
+                distance_text = format_distance(
+                    lib.get("route_distance_m"),
+                    lib.get("straight_distance", lib["distance"])
+                )
+                
+                with st.container():
+                    st.markdown(f"""
+                    <div class="library-item" style="opacity: 0.7; border-left: 3px solid #f8d7da;">
+                        <h4>
+                            📕 {lib['name']}
+                            <span class="distance-badge" style="background: #999;">차로 {duration_text}</span>
+                        </h4>
+                        <p style="margin:0 0;">
+                            {lib['address']}
+                        </p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    unavailable_books = lib.get('unavailable_books', [])
+                    if unavailable_books:
+                        with st.expander(f"📕 대출 중 도서 {len(unavailable_books)}권", expanded=False):
+                            for book in unavailable_books:
+                                _render_book_card(book, available=False)
+                    
+                    st.write("")
+        
         show_library_search_button(st.session_state["book_name"], user_region)
+
+        # 검색 결과 내보내기
+        st.markdown("---")
+        st.markdown("#### 💾 검색 결과 내보내기")
+        
+        # 내보내기 데이터 준비
+        export_data = []
+        for lib in all_libraries:
+            for book in lib.get("books", []):
+                export_data.append({
+                    "도서명": book.get("title", ""),
+                    "저자": book.get("author", ""),
+                    "도서관": lib.get("name", ""),
+                    "주소": lib.get("address", ""),
+                    "대출상태": "대출가능",
+                    "청구기호": book.get("call_number", ""),
+                    "거리(km)": f"{lib.get('distance', 0):.2f}",
+                })
+            for book in lib.get("unavailable_books", []):
+                export_data.append({
+                    "도서명": book.get("title", ""),
+                    "저자": book.get("author", ""),
+                    "도서관": lib.get("name", ""),
+                    "주소": lib.get("address", ""),
+                    "대출상태": f"대출중 (반납예정: {book.get('return_date', '미정')})",
+                    "청구기호": book.get("call_number", ""),
+                    "거리(km)": f"{lib.get('distance', 0):.2f}",
+                })
+        
+        # 대출불가 도서관의 도서도 추가
+        for lib in unavailable_libraries:
+            for book in lib.get("unavailable_books", []):
+                export_data.append({
+                    "도서명": book.get("title", ""),
+                    "저자": book.get("author", ""),
+                    "도서관": lib.get("name", ""),
+                    "주소": lib.get("address", ""),
+                    "대출상태": f"대출중 (반납예정: {book.get('return_date', '미정')})",
+                    "청구기호": book.get("call_number", ""),
+                    "거리(km)": f"{lib.get('distance', 0):.2f}",
+                })
+        
+        # 다운로드 버튼
+        export_col1, export_col2 = st.columns(2)
+        
+        with export_col1:
+            # CSV 다운로드
+            if export_data:
+                import csv
+                import io
+                
+                csv_buffer = io.StringIO()
+                writer = csv.DictWriter(csv_buffer, fieldnames=export_data[0].keys())
+                writer.writeheader()
+                writer.writerows(export_data)
+                
+                st.download_button(
+                    label="📄 CSV로 다운로드",
+                    data=csv_buffer.getvalue().encode("utf-8-sig"),  # BOM 포함 (Excel 호환)
+                    file_name=f"booktoss_{search_title}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
+        
+        with export_col2:
+            # JSON 다운로드
+            if export_data:
+                json_data = json.dumps(export_data, ensure_ascii=False, indent=2)
+                
+                st.download_button(
+                    label="📋 JSON으로 다운로드",
+                    data=json_data.encode("utf-8"),
+                    file_name=f"booktoss_{search_title}_{datetime.now().strftime('%Y%m%d_%H%M')}.json",
+                    mime="application/json",
+                    use_container_width=True,
+                )
 
         # 푸터 안내
         st.markdown("---")

@@ -1,0 +1,9 @@
+{
+  "place": "gangnam",
+  "title": "어린 왕자",
+  "title_hash": "02e90f1d",
+  "created_at": "2026-01-08T23:42:46",
+  "source_path": "00_src/data/parsed/2026-01-08/gangnam_results.jsonl",
+  "cached_path": "00_src/data/cache/gangnam_02e90f1d.jsonl",
+  "result_count": 75
+}

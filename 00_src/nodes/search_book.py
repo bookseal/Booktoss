@@ -98,12 +98,16 @@ def search_book(state: Dict[str, Any]) -> Dict[str, Any]:
     
     allowed = state.get("allowed_domains") or _derive_allowed_from_home(home)
 
-    # 브라우저 생성
+    # 브라우저 생성 (HEADLESS 환경변수로 headless 모드 제어, 기본값: True for Linux)
     browser = None
     if Browser is not None:
+        # 환경변수 HEADLESS가 "false" 또는 "0"이면 headless=False, 그 외에는 True
+        headless_env = os.environ.get("HEADLESS", "true").lower()
+        use_headless = headless_env not in ("false", "0", "no")
+        
         try:
             browser = Browser(
-                headless=False,
+                headless=use_headless,
                 allowed_domains=allowed,
                 window_size={"width": 1280, "height": 900},
                 keep_alive=True,
@@ -112,7 +116,7 @@ def search_book(state: Dict[str, Any]) -> Dict[str, Any]:
                 wait_between_actions=0.2, # 액션 간 대기 시간
                 highlight_elements=False,
             )
-            print(f"[search_book] Browser 생성 완료")
+            print(f"[search_book] Browser 생성 완료 (headless={use_headless})")
         except Exception as e:
             print(f"[search_book] ❌ Browser 생성 실패: {e}")
             browser = None
@@ -144,14 +148,8 @@ def search_book(state: Dict[str, Any]) -> Dict[str, Any]:
             ready = False
             for _ in range(20):  # 20 * 0.5s = 10s
                 try:
-                    eval_result = await browser.cdp_client.send.Runtime.evaluate(
-                        params={
-                            "expression": "document.body ? document.body.innerText : ''",
-                            "returnByValue": True
-                        },
-                        session_id=browser.agent_focus.session_id
-                    )
-                    body_text = (eval_result.get("result", {}) or {}).get("value", "") or ""
+                    page = await browser.get_current_page()
+                    body_text = await page.evaluate("() => document.body ? document.body.innerText : ''")
                     if any(k in body_text for k in SPA_READY_KEYWORDS):
                         ready = True
                         break
@@ -176,21 +174,15 @@ def search_book(state: Dict[str, Any]) -> Dict[str, Any]:
                 except Exception as e:
                     print(f"[search_book] URL 추출 실패: {e}")
             
-            # HTML 추출 및 저장
+            # HTML 추출 및 저장 (browser-use page.evaluate 사용)
             saved_path = None
             html_size = 0
             
-            if browser and hasattr(browser, 'cdp_client') and browser.cdp_client:
+            if browser:
                 try:
                     print(f"[search_book] HTML 추출 시작...")
-                    result = await browser.cdp_client.send.Runtime.evaluate(
-                        params={
-                            "expression": "document.documentElement.outerHTML",
-                            "returnByValue": True
-                        },
-                        session_id=browser.agent_focus.session_id
-                    )
-                    html_content = result.get("result", {}).get("value", "")
+                    page = await browser.get_current_page()
+                    html_content = await page.evaluate("() => document.documentElement.outerHTML")
                     
                     if html_content:
                         # 저장 경로 생성
@@ -246,9 +238,8 @@ def search_book(state: Dict[str, Any]) -> Dict[str, Any]:
                         next_page_num = current_page + 1
                         print(f"[search_book] 🔍 {next_page_num}페이지 버튼 찾는 중...")
                         
-                        # JavaScript로 다음 페이지 버튼 클릭 (다중 패턴 지원)
-                        js_code = f"""
-(function() {{
+                        # JavaScript로 다음 페이지 버튼 클릭 (다중 패턴 지원, 화살표 함수 형식)
+                        js_code = f"""() => {{
     // 패턴 1: 송파구 스타일 - javascript:fnList(N)
     let link = document.querySelector('a[href*="fnList({next_page_num})"]');
     if (link) {{
@@ -284,19 +275,11 @@ def search_book(state: Dict[str, Any]) -> Dict[str, Any]:
     }}
     
     return 'not_found';
-}})()
-"""
+}}"""
                         
-                        # JavaScript 실행
-                        result = await browser.cdp_client.send.Runtime.evaluate(
-                            params={
-                                "expression": js_code,
-                                "returnByValue": True
-                            },
-                            session_id=browser.agent_focus.session_id
-                        )
-                        
-                        click_result = result.get("result", {}).get("value", "not_found")
+                        # JavaScript 실행 (playwright page.evaluate 사용)
+                        page = await browser.get_current_page()
+                        click_result = await page.evaluate(js_code)
                         clicked = click_result != "not_found"
                         
                         print(f"[search_book] {'✅' if clicked else '📍'} {next_page_num}페이지 클릭 결과: {click_result}")
@@ -312,16 +295,10 @@ def search_book(state: Dict[str, Any]) -> Dict[str, Any]:
                         print(f"[search_book] {current_page}페이지 로딩 대기 중... (7초)")
                         await asyncio.sleep(7)
                         
-                        # HTML 추출
+                        # HTML 추출 (browser-use page.evaluate 사용)
                         print(f"[search_book] {current_page}페이지 HTML 추출 중...")
-                        page_html = await browser.cdp_client.send.Runtime.evaluate(
-                            params={
-                                "expression": "document.documentElement.outerHTML",
-                                "returnByValue": True
-                            },
-                            session_id=browser.agent_focus.session_id
-                        )
-                        page_html_content = page_html.get("result", {}).get("value", "")
+                        page = await browser.get_current_page()
+                        page_html_content = await page.evaluate("() => document.documentElement.outerHTML")
                         
                         if page_html_content and len(page_html_content) > 1000:
                             # 파일명 생성
@@ -394,14 +371,8 @@ def search_book(state: Dict[str, Any]) -> Dict[str, Any]:
                 ready = False
                 for _ in range(20):  # 20 * 0.5s = 10s
                     try:
-                        eval_result = await browser.cdp_client.send.Runtime.evaluate(
-                            params={
-                                "expression": "document.body ? document.body.innerText : ''",
-                                "returnByValue": True
-                            },
-                            session_id=browser.agent_focus.session_id
-                        )
-                        body_text = (eval_result.get("result", {}) or {}).get("value", "") or ""
+                        page = await browser.get_current_page()
+                        body_text = await page.evaluate("() => document.body ? document.body.innerText : ''")
                         if any(k in body_text for k in SPA_READY_KEYWORDS):
                             ready = True
                             break
@@ -426,21 +397,15 @@ def search_book(state: Dict[str, Any]) -> Dict[str, Any]:
                     except Exception as e:
                         print(f"[search_book LLM] URL 추출 실패: {e}")
                 
-                # HTML 추출 및 저장
+                # HTML 추출 및 저장 (browser-use page.evaluate 사용)
                 saved_path = None
                 html_size = 0
                 
-                if browser and hasattr(browser, 'cdp_client') and browser.cdp_client:
+                if browser:
                     try:
                         print(f"[search_book LLM] HTML 추출 시작...")
-                        result = await browser.cdp_client.send.Runtime.evaluate(
-                            params={
-                                "expression": "document.documentElement.outerHTML",
-                                "returnByValue": True
-                            },
-                            session_id=browser.agent_focus.session_id
-                        )
-                        html_content = result.get("result", {}).get("value", "")
+                        page = await browser.get_current_page()
+                        html_content = await page.evaluate("() => document.documentElement.outerHTML")
                         
                         if html_content:
                             today = datetime.now().strftime("%Y-%m-%d")

@@ -1,0 +1,41 @@
+# requirements-linux.txt
+# Linux 환경용 의존성 파일 (버전 제약 완화, macOS 전용 패키지 제외)
+# 
+# 요구사항: Python >= 3.11 (browser-use 패키지가 3.11 이상 필요)
+
+# 핵심 패키지
+streamlit
+langchain-core
+langgraph
+langgraph-checkpoint
+langgraph-prebuilt
+langgraph-sdk
+langsmith
+
+# 브라우저 자동화
+browser-use
+playwright
+
+# OpenAI / LLM
+openai
+anthropic
+
+# 웹 요청 / 비동기
+aiohttp
+aiofiles
+httpx
+requests
+
+# HTML 파싱
+beautifulsoup4
+bs4
+
+# 설정 관리
+python-dotenv
+pyyaml
+
+# 기타 유틸리티
+pillow
+tqdm
+pydantic
+pydantic-settings
