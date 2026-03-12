@@ -60,32 +60,78 @@ def build_graph():
 
 app = build_graph()
 
+# Node metadata for progress tracking
+NODE_INFO = {
+    "get_library_portal": {
+        "file": "resolve_catalog.py",
+        "function": "resolve_catalog()",
+        "label": "Resolving library portal URL",
+    },
+    "search_book": {
+        "file": "search_book.py",
+        "function": "search_book()",
+        "label": "Searching library portal via Playwright",
+    },
+    "parse_html": {
+        "file": "parse_html.py",
+        "function": "parse_html()",
+        "label": "Parsing HTML with BeautifulSoup",
+    },
+}
+
+PIPELINE_ORDER = ["get_library_portal", "search_book", "parse_html"]
+
+
+def _node_detail(node_name: str, state: Dict[str, Any]) -> str:
+    """Extract a short summary from a completed node's state."""
+    if node_name == "get_library_portal":
+        url = state.get("catalog_home_url", "")
+        if url:
+            try:
+                return f"Portal → {url.split('//')[1].split('/')[0]}"
+            except Exception:
+                return f"Portal → {url}"
+        return "Portal resolution failed"
+    elif node_name == "search_book":
+        total = state.get("total_pages", 0)
+        size = state.get("html_size", 0)
+        return f"Saved {total} HTML page(s) ({size:,} bytes)"
+    elif node_name == "parse_html":
+        books = state.get("parsed_books", [])
+        return f"Extracted {len(books)} book record(s)"
+    return "Done"
+
 
 def run_once(
     place: str,
     title: str,
     use_cache: bool = True,
-    max_cache_age_hours: int = DEFAULT_MAX_AGE_HOURS
+    max_cache_age_hours: int = DEFAULT_MAX_AGE_HOURS,
+    progress_callback=None,
 ) -> Dict[str, Any]:
     """
     그래프를 한 번 실행한다.
 
     입력:
-      - place: 'gangnam' | 'songpa' | 'seocho' ... 등
+      - place: 'gangnam' | 'songpa' | 'seocho' 등
       - title: 책 제목(검색어)
       - use_cache: 캐시 사용 여부 (기본 True)
       - max_cache_age_hours: 캐시 최대 유효 시간 (기본 24시간)
+      - progress_callback: 진행 콜백 fn(file, function, status, detail)
 
     출력: 최종 state(dict)
     """
-    # 캐시 확인 (use_cache=True인 경우)
+    _cb = progress_callback or (lambda **kw: None)
+
+    # 캐시 확인
     if use_cache:
+        _cb(file="cache.py", function="get_cached_result()", status="start", detail="Checking result cache...")
         cached_jsonl = get_cached_result(place, title, max_cache_age_hours)
         if cached_jsonl:
             meta = get_cache_meta(place, title)
-            print(f"[pipeline] ✅ 캐시 히트! {place}/{title} (생성: {meta.get('created_at', 'unknown')})")
-            
-            # 캐시된 결과로 state 구성
+            count = meta.get("result_count", "?") if meta else "?"
+            _cb(file="cache.py", function="get_cached_result()", status="done", detail=f"Cache hit — {count} books cached")
+            print(f"[pipeline] ✅ 캐시 히트! {place}/{title}")
             return {
                 "place": place,
                 "title": title,
@@ -97,40 +143,56 @@ def run_once(
                 "parsed_books": _load_jsonl(cached_jsonl),
             }
         else:
-            print(f"[pipeline] 캐시 미스: {place}/{title} - 새로 검색합니다.")
-    
+            _cb(file="cache.py", function="get_cached_result()", status="done", detail="Cache miss — starting fresh search")
+            print(f"[pipeline] 캐시 미스: {place}/{title}")
+
     initial_state: Dict[str, Any] = {"place": place, "title": title}
 
     # 저장 경로 설정
     date_str = datetime.now().strftime("%Y-%m-%d")
     default_raw_dir = os.path.join("00_src", "data", "raw", date_str)
     default_parsed_dir = os.path.join("00_src", "data", "parsed", date_str)
-    
     try:
         os.makedirs(default_raw_dir, exist_ok=True)
         os.makedirs(default_parsed_dir, exist_ok=True)
     except Exception:
         pass
 
-    # JSONL 저장 경로 설정
     default_jsonl = os.path.join(default_parsed_dir, f"{place}_results.jsonl")
     initial_state["out_jsonl"] = default_jsonl
 
-    result_state = app.invoke(initial_state)
-    
+    # Pipeline execution — stream for real-time node tracking
+    if progress_callback:
+        result_state = dict(initial_state)
+        first = NODE_INFO[PIPELINE_ORDER[0]]
+        _cb(file=first["file"], function=first["function"], status="start", detail=first["label"])
+
+        for stream_event in app.stream(initial_state):
+            for node_name, state_update in stream_event.items():
+                result_state.update(state_update)
+                if node_name in NODE_INFO:
+                    info = NODE_INFO[node_name]
+                    _cb(file=info["file"], function=info["function"], status="done", detail=_node_detail(node_name, state_update))
+                    idx = PIPELINE_ORDER.index(node_name)
+                    if idx + 1 < len(PIPELINE_ORDER):
+                        nxt = NODE_INFO[PIPELINE_ORDER[idx + 1]]
+                        _cb(file=nxt["file"], function=nxt["function"], status="start", detail=nxt["label"])
+    else:
+        result_state = app.invoke(initial_state)
+
     # 검색 성공 시 캐시에 저장
     if result_state.get("parse_success") and result_state.get("out_jsonl"):
         jsonl_path = result_state.get("out_jsonl")
         if os.path.exists(jsonl_path):
+            _cb(file="cache.py", function="save_to_cache()", status="start", detail="Saving results to cache...")
             save_to_cache(
                 place=place,
                 title=title,
                 jsonl_path=jsonl_path,
-                extra_meta={
-                    "search_time": datetime.now().isoformat(timespec="seconds"),
-                }
+                extra_meta={"search_time": datetime.now().isoformat(timespec="seconds")}
             )
-    
+            _cb(file="cache.py", function="save_to_cache()", status="done", detail="Cached (TTL: 24h)")
+
     result_state["from_cache"] = False
     return result_state
 

@@ -233,6 +233,43 @@ st.markdown("""
 # 유틸리티 함수
 # ============================================================================
 
+import time as _time
+
+_trace_start_times: Dict[str, float] = {}
+
+def _write_trace(file: str, func: str, status: str, detail: str = ""):
+    """Write a styled pipeline execution trace line inside st.status."""
+    ts = datetime.now().strftime("%H:%M:%S")
+    key = f"{file}:{func}"
+
+    if status == "start":
+        _trace_start_times[key] = _time.time()
+        icon, color = "▶", "#89b4fa"
+    elif status == "done":
+        icon, color = "✓", "#a6e3a1"
+    elif status == "error":
+        icon, color = "✗", "#f38ba8"
+    else:
+        icon, color = "•", "#cdd6f4"
+
+    elapsed = ""
+    if status in ("done", "error") and key in _trace_start_times:
+        secs = _time.time() - _trace_start_times.pop(key)
+        elapsed = f'<span style="color:#585b70;font-size:0.78rem;"> {secs:.1f}s</span>'
+
+    st.markdown(
+        f'<div style="font-family:\'JetBrains Mono\',\'Fira Code\',monospace;'
+        f'font-size:0.82rem;padding:2px 0;line-height:1.7;">'
+        f'<span style="color:#585b70;">[{ts}]</span> '
+        f'<span style="color:{color};">{icon}</span> '
+        f'<span style="color:#cba6f7;">{file}</span> '
+        f'<span style="color:#585b70;">›</span> '
+        f'<span style="color:#89dceb;">{func}</span> '
+        f'<span style="color:#a6adc8;">— {detail}</span>'
+        f'{elapsed}</div>',
+        unsafe_allow_html=True,
+    )
+
 def calculate_distance(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     """두 좌표 간 거리 계산 (Haversine 공식, km 단위)"""
     R = 6371  # 지구 반지름 (km)
@@ -799,20 +836,20 @@ if ("address" in st.session_state and "book_name" in st.session_state and
     is_multi_region = st.session_state.get("search_all_regions", False)
     search_title = st.session_state["book_name"]
     
-    # 진행 상태 표시용 status 컴포넌트
-    with st.status("🔍 도서관 검색 중...", expanded=True) as status:
-        # Step 1: 주소 확인
-        status.update(label="📍 주소 확인 중...")
-        st.write("📍 주소 좌표 변환 중...")
-        
+    # 진행 상태 표시용 status 컴포넌트 (Pipeline Trace)
+    with st.status("🔬 Pipeline Execution", expanded=True) as status:
+        # Step 1: 주소 → 좌표 변환
+        _write_trace("app.py", "get_coordinates()", "start", "Converting address to coordinates...")
+
         user_coords = get_coordinates(st.session_state["address"])
-        
+
         if not user_coords:
-            status.update(label="❌ 주소 확인 실패", state="error")
+            _write_trace("app.py", "get_coordinates()", "error", "Address not found")
+            status.update(label="❌ Address resolution failed", state="error")
             stop_event = ("error", "❌ 입력하신 주소를 찾을 수 없거나 주소 정보가 부족합니다. 주소를 다시 확인해주세요.")
         else:
             user_lng, user_lat, user_region = user_coords
-            st.write(f"✅ 위치 확인: {user_region}")
+            _write_trace("app.py", "get_coordinates()", "done", f"Resolved → {user_region} ({user_lat:.4f}, {user_lng:.4f})")
 
             # 실제 도서관 검색 실행 (pipeline_graph 연동)
             sys.path.insert(0, "00_src")
@@ -821,13 +858,11 @@ if ("address" in st.session_state and "book_name" in st.session_state and
             # Step 2: 도서관 검색
             if is_multi_region:
                 # 멀티지역 검색 모드
-                status.update(label="🌐 전체 지역 검색 중... (강남/서초/송파)")
-                st.write("🌐 3개 지역 동시 검색 시작...")
-                
-                # 진행 상태 콜백
+                _write_trace("pipeline_graph.py", "run_multi_region()", "start", "Parallel search across 3 regions...")
+
                 progress_placeholder = st.empty()
                 region_status = {"gangnam": "⏳", "seocho": "⏳", "songpa": "⏳"}
-                
+
                 def update_progress(region: str, state: str, message: str):
                     if state == "start":
                         region_status[region] = "🔄"
@@ -837,69 +872,64 @@ if ("address" in st.session_state and "book_name" in st.session_state and
                         region_status[region] = "✅"
                     elif state == "error":
                         region_status[region] = "❌"
-                    
                     status_text = " | ".join([
-                        f"{REGION_NAMES.get(r, r)}: {s}" 
-                        for r, s in region_status.items()
+                        f"{REGION_NAMES.get(r, r)}: {s}" for r, s in region_status.items()
                     ])
                     progress_placeholder.write(status_text)
-                
-                import time
-                start_time = time.time()
+
+                start_time = _time.time()
                 result = run_multi_region(title=search_title, progress_callback=update_progress)
-                elapsed_time = time.time() - start_time
-                
+                elapsed_time = _time.time() - start_time
+
+                _write_trace("pipeline_graph.py", "run_multi_region()", "done", f"Found {result.get('total_count', 0)} books ({elapsed_time:.1f}s)")
+
                 if result.get("total_count", 0) > 0:
-                    st.write(f"✅ 총 {result['total_count']}건 발견 (소요 시간: {elapsed_time:.1f}초)")
-                    # 모든 도서를 JSONL 형식으로 변환
                     jsonl_data = "\n".join([
-                        json.dumps(book, ensure_ascii=False) 
+                        json.dumps(book, ensure_ascii=False)
                         for book in result.get("all_books", [])
                     ])
                 else:
-                    status.update(label="❌ 검색 결과 없음", state="error")
+                    status.update(label="❌ No results", state="error")
                     stop_event = ("error", "❌ 검색 결과가 없습니다. 다시 시도해주세요.")
-                    
+
             else:
-                # 단일 지역 검색 모드
+                # 단일 지역 검색 모드  — pipeline trace callback
                 place = ALLOWED_REGION_TO_PLACE.get(user_region)
 
                 if not place:
+                    _write_trace("app.py", "region_check", "error", f"Unsupported region: {user_region}")
                     status.update(label="⚠️ 지원하지 않는 지역", state="error")
                     stop_event = ("warning", "😥 입력하신 지역의 서비스는 아직 준비 중입니다. 강남구, 서초구, 송파구 내에서 검색해주세요.")
                 else:
-                    status.update(label=f"🔍 {user_region} 도서관 검색 중...")
-                    st.write(f"🔍 {user_region} 도서관에서 '{search_title}' 검색 중...")
-                    
-                    import time
-                    start_time = time.time()
-                    
-                    # LangGraph 파이프라인 실행 (브라우저 자동화 + HTML 파싱)
-                    result = run_once(place=place, title=search_title)
-                    elapsed_time = time.time() - start_time
-                    
-                    if result.get("from_cache"):
-                        st.write(f"✅ 캐시에서 결과 로드 (소요 시간: {elapsed_time:.1f}초)")
-                    else:
-                        st.write(f"✅ 검색 완료 (소요 시간: {elapsed_time:.1f}초)")
-                    
+                    def pipeline_progress(**kwargs):
+                        _write_trace(
+                            kwargs.get("file", ""),
+                            kwargs.get("function", ""),
+                            kwargs.get("status", ""),
+                            kwargs.get("detail", ""),
+                        )
+
+                    start_time = _time.time()
+                    result = run_once(place=place, title=search_title, progress_callback=pipeline_progress)
+                    elapsed_time = _time.time() - start_time
+
+                    _write_trace("pipeline_graph.py", "run_once()", "done", f"Pipeline finished in {elapsed_time:.1f}s")
+
                     # JSONL 데이터 추출
                     jsonl_path = result.get("out_jsonl")
                     if jsonl_path and os.path.exists(jsonl_path):
                         with open(jsonl_path, "r", encoding="utf-8") as f:
                             jsonl_data = f.read()
                     else:
-                        status.update(label="❌ 검색 실패", state="error")
+                        status.update(label="❌ Search failed", state="error")
                         stop_event = ("error", "❌ 도서관 검색에 실패했습니다. 다시 시도해주세요.")
 
             # Step 3: 결과 분석
             if not stop_event:
-                status.update(label="📊 결과 분석 중...")
-                st.write("📊 도서관 거리 계산 및 정렬 중...")
-                
-                # 대출불가 도서 표시 옵션 확인
+                _write_trace("app.py", "process_book_results()", "start", "Calculating distances & sorting libraries...")
+
                 show_unavailable_books = st.session_state.get("show_unavailable", False)
-                
+
                 (
                     map_libraries,
                     all_libraries,
@@ -908,19 +938,17 @@ if ("address" in st.session_state and "book_name" in st.session_state and
                 ) = process_book_results(jsonl_data, user_lat, user_lng, include_unavailable=show_unavailable_books)
 
                 if not all_libraries and not unavailable_libraries:
+                    _write_trace("app.py", "process_book_results()", "done", "No available libraries found")
                     status.update(label="⚠️ 대출 가능한 도서관 없음", state="error")
                     stop_event = ("warning", "⚠️ 현재 대출 가능한 도서관을 찾을 수 없습니다.")
                     show_search_btn = True
                 elif not all_libraries and unavailable_libraries:
+                    _write_trace("app.py", "process_book_results()", "done", f"0 available, {len(unavailable_libraries)} checked-out")
                     status.update(label=f"⚠️ 대출가능 없음, 대출중 {len(unavailable_libraries)}곳", state="complete")
-                    st.write(f"⚠️ 대출 가능한 도서관은 없지만, 대출 중인 도서관 {len(unavailable_libraries)}곳 발견")
                 else:
                     total = len(all_libraries) + len(unavailable_libraries)
-                    status.update(label=f"✅ 검색 완료! {total}곳 발견", state="complete")
-                    if unavailable_libraries:
-                        st.write(f"✅ 대출 가능 {len(all_libraries)}곳 + 대출 중 {len(unavailable_libraries)}곳 발견")
-                    else:
-                        st.write(f"✅ 대출 가능한 도서관 {len(all_libraries)}곳 발견")
+                    _write_trace("app.py", "process_book_results()", "done", f"Found {len(all_libraries)} available + {len(unavailable_libraries)} checked-out libraries")
+                    status.update(label=f"✅ Complete — {total} libraries found", state="complete")
 
     if stop_event:
         level, message = stop_event
