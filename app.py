@@ -270,6 +270,72 @@ def _write_trace(file: str, func: str, status: str, detail: str = ""):
         unsafe_allow_html=True,
     )
 
+def _render_parse_preview(raw_html: str, parsed_data: Dict):
+    """Render a highlighted HTML block showing what BeautifulSoup extracted."""
+    import html as _html
+
+    # Color map for each field
+    FIELD_COLORS = {
+        "title":       ("#667eea", "Title"),
+        "author":      ("#a6e3a1", "Author"),
+        "library":     ("#cba6f7", "Library"),
+        "status":      ("#fab387", "Status"),
+        "call_number": ("#89dceb", "Call#"),
+    }
+
+    # Escape raw HTML for display
+    escaped = _html.escape(raw_html)
+
+    # Highlight each extracted value in the escaped HTML
+    for field, (color, label) in FIELD_COLORS.items():
+        value = parsed_data.get(field)
+        if value and isinstance(value, str):
+            safe_val = _html.escape(value)
+            if safe_val in escaped:
+                escaped = escaped.replace(
+                    safe_val,
+                    f'<mark style="background:{color}22;border-bottom:2px solid {color};'
+                    f'border-radius:2px;padding:0 2px;" title="{label}">{safe_val}</mark>',
+                    1,  # only first occurrence
+                )
+
+    # Build legend
+    legend_items = []
+    for field, (color, label) in FIELD_COLORS.items():
+        val = parsed_data.get(field)
+        if val:
+            legend_items.append(
+                f'<span style="display:inline-block;margin:2px 6px 2px 0;'
+                f'padding:2px 8px;border-radius:4px;font-size:0.78rem;'
+                f'background:{color}22;border-left:3px solid {color};">'
+                f'<b>{label}</b>: {_html.escape(str(val))}</span>'
+            )
+
+    avail = parsed_data.get("available", False)
+    avail_badge = (
+        '<span style="background:#a6e3a122;color:#a6e3a1;padding:2px 8px;border-radius:10px;'
+        'font-size:0.78rem;font-weight:600;">✓ Available</span>'
+        if avail else
+        '<span style="background:#f38ba822;color:#f38ba8;padding:2px 8px;border-radius:10px;'
+        'font-size:0.78rem;font-weight:600;">✗ Checked out</span>'
+    )
+    legend_items.append(avail_badge)
+
+    # Render component
+    component_html = f"""
+    <div style="font-family:system-ui,sans-serif;">
+      <div style="margin-bottom:10px;line-height:2;">
+        {''.join(legend_items)}
+      </div>
+      <div style="background:#1e1e2e;color:#cdd6f4;padding:14px;border-radius:8px;
+                  font-family:'JetBrains Mono','Fira Code',monospace;font-size:0.75rem;
+                  line-height:1.6;overflow-x:auto;white-space:pre-wrap;word-break:break-all;
+                  max-height:350px;overflow-y:auto;border:1px solid #313244;">
+{escaped}
+      </div>
+    </div>"""
+    st.components.v1.html(component_html, height=440, scrolling=True)
+
 def calculate_distance(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     """두 좌표 간 거리 계산 (Haversine 공식, km 단위)"""
     R = 6371  # 지구 반지름 (km)
@@ -831,6 +897,7 @@ if ("address" in st.session_state and "book_name" in st.session_state and
     map_libraries: List[Dict] = []
     all_libraries: List[Dict] = []
     first_cover_image: Optional[str] = None
+    _pipeline_result = None  # pipeline result for parse preview
 
     # 전체 지역 검색 여부 확인
     is_multi_region = st.session_state.get("search_all_regions", False)
@@ -912,6 +979,7 @@ if ("address" in st.session_state and "book_name" in st.session_state and
                     start_time = _time.time()
                     result = run_once(place=place, title=search_title, progress_callback=pipeline_progress)
                     elapsed_time = _time.time() - start_time
+                    _pipeline_result = result
 
                     _write_trace("pipeline_graph.py", "run_once()", "done", f"Pipeline finished in {elapsed_time:.1f}s")
 
@@ -989,6 +1057,14 @@ if ("address" in st.session_state and "book_name" in st.session_state and
             </p>
         </div>
         """, unsafe_allow_html=True)
+
+        # 🔬 BeautifulSoup Parsing Preview
+        _sample_html = _pipeline_result.get("parse_sample_html") if _pipeline_result else None
+        _sample_data = _pipeline_result.get("parse_sample_data") if _pipeline_result else None
+        if _sample_html and _sample_data:
+            with st.expander("🔬 BeautifulSoup Extraction Preview", expanded=False):
+                st.caption("How the parser extracted structured data from raw HTML")
+                _render_parse_preview(_sample_html, _sample_data)
 
         # 지도 표시 (가장 가까운 N개)
         if map_libraries:

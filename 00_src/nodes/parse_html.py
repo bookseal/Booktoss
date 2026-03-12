@@ -504,6 +504,8 @@ def parse_html(state: Dict[str, Any]) -> Dict[str, Any]:
 
     all_parsed: List[Dict[str, Any]] = []
     errors = []
+    sample_block_html: Optional[str] = None
+    sample_block_data: Optional[Dict[str, Any]] = None
     
     # 각 HTML 파일을 순차적으로 파싱
     for idx, html_path in enumerate(html_paths, start=1):
@@ -529,6 +531,11 @@ def parse_html(state: Dict[str, Any]) -> Dict[str, Any]:
                 rec.setdefault("available", False)
                 
                 page_parsed.append(rec)
+
+                # Save first successful parse as sample for UI visualization
+                if sample_block_html is None:
+                    sample_block_html = str(blk)
+                    sample_block_data = dict(rec)
             
             all_parsed.extend(page_parsed)
             print(f"[parse_html] 페이지 {idx} 파싱 완료: {len(page_parsed)}건 추출 ({p.name})")
@@ -561,6 +568,10 @@ def parse_html(state: Dict[str, Any]) -> Dict[str, Any]:
         out["parse_error"] = " | ".join(errors)
     else:
         out["parse_error"] = None if out["parse_success"] else "No item blocks parsed (DOM mode)."
+
+    # ── Sample for UI visualization ──
+    out["parse_sample_html"] = sample_block_html
+    out["parse_sample_data"] = sample_block_data
 
     # ── JSONL 저장 ──
     saved = []
