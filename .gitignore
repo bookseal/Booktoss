@@ -1,0 +1,16 @@
+# --- secrets ---
+.env
+
+# --- python ---
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# --- large v1 reference media (kept on disk, not in git) ---
+docs/v1/*.mp4
+docs/v1/*.hwp
+docs/v1/*.pdf
+
+# --- crawl artifacts ---
+docs/v1/00_src/data/raw/
