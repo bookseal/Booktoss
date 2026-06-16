@@ -111,8 +111,8 @@
 
     <table class="roadmap">
       <tr><th>버전</th><th>이 버전이 끝나면…</th><th>핵심 기술</th><th>상태</th></tr>
-      <tr class="next"><td>v0.0.1</td><td class="goal">Streamlit "Hello, BookToss" 화면이 브라우저에 뜬다</td><td>Streamlit</td><td class="st">⏳ 다음</td></tr>
-      <tr><td>v0.0.2</td><td class="goal">터미널에서 Solar API에 첫 호출이 성공한다</td><td>Upstage Solar · .env</td><td class="st">예정</td></tr>
+      <tr><td>v0.0.1</td><td class="goal">Streamlit "Hello, BookToss" 화면이 브라우저에 뜬다</td><td>Streamlit</td><td class="st">✅ 완료</td></tr>
+      <tr class="next"><td>v0.0.2</td><td class="goal">터미널에서 Solar API에 첫 호출이 성공한다</td><td>Upstage Solar · .env</td><td class="st">⏳ 다음</td></tr>
       <tr><td>v0.0.3</td><td class="goal">Streamlit 입력창에 쓰면 Solar의 답이 화면에 나온다</td><td>Streamlit + Solar</td><td class="st">예정</td></tr>
       <tr><td>v0.0.4</td><td class="goal">코드를 <code>src/</code> 구조로 정리한다 (llm·nodes·graph 분리)</td><td>패키지 레이아웃</td><td class="st">예정</td></tr>
       <tr><td>v0.0.5</td><td class="goal">Playwright로 브라우저를 열고 어떤 페이지의 제목을 읽어온다</td><td>Playwright</td><td class="st">예정</td></tr>
@@ -215,7 +215,7 @@ git commit -m "chore: start v2-solar from scratch; archive v1 under docs/v1"</co
   <!-- ===================== v0.0.1 ===================== -->
   <section id="v0-0-1">
     <div class="step-head">
-      <span class="chip wip">v0.0.1 · 진행 중</span>
+      <span class="chip done">v0.0.1 · 완료 ✓</span>
       <h2>Streamlit "Hello, BookToss"</h2>
     </div>
     <p class="lead" style="font-size:17px">첫 결과물은 거창하지 않습니다 —
@@ -262,16 +262,32 @@ st.caption("서울 도서관을 한 번에 검색하는 AI 에이전트 · v0.0.
       </p>
     </div>
 
-    <h3>직접 해보기 · 첫 화면에 뭘 보여줄까</h3>
+    <h3>첫 화면에 뭘 보여줄까 — 이렇게 채웠습니다</h3>
     <p>
-      <code>app.py</code>의 <code>TODO(human)</code> 자리에 첫 화면 본문을 채웁니다.
-      지금은 동작하는 로직이 없어도 됩니다 — <strong>무엇이 보일지</strong>를 정하는 게 핵심입니다.
-      예: 프로젝트 한 줄 소개 + 책 제목을 입력하는 <code>st.text_input</code> + 아직 눌러도
-      아무 일 없는 <code>st.button("검색")</code>. 이 자리가 v0.1.0의 검색창으로 자랍니다.
+      "무엇이 보일지"를 정하는 자리입니다. 이번엔 한 줄 소개 + 책 제목 입력칸 + 검색 버튼을
+      뒀습니다. 버튼 로직은 아직 진짜 검색이 아니라 "다음 버전에서 연결된다"는 안내만 합니다 —
+      이 입력칸과 버튼이 <code>v0.1.0</code>의 실제 검색창으로 자랍니다.
     </p>
+    <pre><code>st.write("서울 곳곳의 도서관을 **한 번에** 검색하는 AI 에이전트입니다. 찾는 책을 입력해 보세요.")
 
-    <p class="muted">✅ 화면이 뜨면 v0.0.1 완료. 다음은 <code>v0.0.2</code> — Solar API 연결.
-      (막혔던 지점은 구현 후 여기에 채워집니다.)</p>
+book = st.text_input("찾는 책 제목", placeholder="예: 코스모스")
+if st.button("검색", type="primary"):
+    if book:
+        st.info(f"'{book}' 검색은 다음 버전에서 연결됩니다. (지금은 화면만!)")
+    else:
+        st.warning("책 제목을 입력해 주세요.")</code></pre>
+
+    <div class="callout why">
+      <div class="label">막혔던 지점</div>
+      <p style="margin:0">
+        없었습니다 — <code>streamlit run app.py</code> 한 번에 화면이 떴습니다. Streamlit이
+        "파이썬만으로 가장 빠르게 보이는 것"을 만들어주는 이유죠. (앞으로 막히는 단계가 나오면
+        이 칸에 솔직히 기록합니다.)
+      </p>
+    </div>
+
+    <p class="muted">✅ <strong>v0.0.1 완료</strong> — 화면이 뜬다. 다음은
+      <code>v0.0.2</code> · Solar API 연결.</p>
   </section>
 
 </main>

@@ -9,7 +9,12 @@ st.set_page_config(page_title="BookToss", page_icon="📚", layout="centered")
 st.title("📚 BookToss")
 st.caption("서울 도서관을 한 번에 검색하는 AI 에이전트 · v0.0.1")
 
-# TODO(human): 첫 화면 본문을 채워보세요.
-# 지금은 동작 로직이 없어도 됩니다 — "무엇이 보일지"를 정하는 게 목표입니다.
-# 예: 프로젝트 한 줄 소개(st.write/st.markdown) + 책 제목 입력칸(st.text_input)
-#     + 아직 눌러도 아무 일 없는 검색 버튼(st.button). 이 자리가 v0.1.0의 검색창으로 자랍니다.
+st.write("서울 곳곳의 도서관을 **한 번에** 검색하는 AI 에이전트입니다. 찾는 책을 입력해 보세요.")
+
+# 이 입력칸과 버튼이 앞으로 v0.1.0의 진짜 검색창으로 자랍니다.
+book = st.text_input("찾는 책 제목", placeholder="예: 코스모스")
+if st.button("검색", type="primary"):
+    if book:
+        st.info(f"'{book}' 검색은 다음 버전에서 연결됩니다. (지금은 화면만!)")
+    else:
+        st.warning("책 제목을 입력해 주세요.")
