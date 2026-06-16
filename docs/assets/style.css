@@ -1,0 +1,147 @@
+/* BookToss v2 — tutorial site styles. Hand-written, no build step. */
+:root {
+  --bg: #0f1115;
+  --bg-soft: #171a21;
+  --bg-code: #11141a;
+  --border: #262b36;
+  --text: #d7dce5;
+  --text-dim: #9aa3b2;
+  --accent: #6ea8fe;
+  --accent-soft: #2a3a5c;
+  --green: #5dd6a0;
+  --yellow: #e8c468;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo",
+          "Noto Sans KR", Roboto, sans-serif;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  line-height: 1.7;
+  font-size: 16px;
+}
+.wrap { max-width: 820px; margin: 0 auto; padding: 0 20px 100px; }
+
+/* header */
+.site-header {
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--bg-soft), var(--bg));
+  padding: 14px 0;
+  position: sticky; top: 0; z-index: 10;
+  backdrop-filter: blur(8px);
+}
+.site-header .wrap { padding-bottom: 0; display: flex; align-items: center; gap: 12px; }
+.site-header a.brand { color: var(--text); text-decoration: none; font-weight: 700; font-size: 17px; }
+.site-header .brand .v2 { color: var(--accent); }
+.site-header nav { margin-left: auto; display: flex; gap: 18px; }
+.site-header nav a { color: var(--text-dim); text-decoration: none; font-size: 14px; }
+.site-header nav a:hover { color: var(--accent); }
+
+/* hero */
+.hero { padding: 56px 0 28px; }
+.hero h1 { font-size: 38px; line-height: 1.2; margin: 0 0 12px; }
+.hero p.lead { font-size: 19px; color: var(--text-dim); margin: 0 0 8px; }
+.badge {
+  display: inline-block; font-family: var(--mono); font-size: 12px;
+  color: var(--accent); background: var(--accent-soft); border: 1px solid var(--border);
+  padding: 3px 10px; border-radius: 999px; margin-bottom: 18px;
+}
+
+/* content */
+h2 { font-size: 26px; margin: 44px 0 14px; padding-top: 8px; }
+h3 { font-size: 19px; margin: 30px 0 10px; color: var(--text); }
+p, li { color: var(--text); }
+a { color: var(--accent); }
+hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+.muted { color: var(--text-dim); }
+
+/* callout */
+.callout {
+  border: 1px solid var(--border); border-left: 3px solid var(--accent);
+  background: var(--bg-soft); border-radius: 8px; padding: 14px 18px; margin: 22px 0;
+}
+.callout.why { border-left-color: var(--yellow); }
+.callout.insight { border-left-color: var(--green); }
+.callout .label {
+  font-family: var(--mono); font-size: 12px; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text-dim); margin-bottom: 6px;
+}
+
+/* code */
+pre {
+  background: var(--bg-code); border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px 16px; overflow-x: auto; font-family: var(--mono);
+  font-size: 13.5px; line-height: 1.6; color: #cdd6e4;
+}
+code { font-family: var(--mono); font-size: 0.9em; background: var(--bg-soft);
+  padding: 1px 6px; border-radius: 5px; border: 1px solid var(--border); }
+pre code { background: none; border: none; padding: 0; }
+.comment { color: var(--text-dim); }
+
+/* file tree */
+.tree { white-space: pre; }
+
+/* step cards (index) */
+.steps { list-style: none; padding: 0; margin: 24px 0; display: grid; gap: 12px; }
+.steps li a {
+  display: flex; align-items: baseline; gap: 14px; text-decoration: none;
+  border: 1px solid var(--border); background: var(--bg-soft); border-radius: 10px;
+  padding: 16px 18px; transition: border-color .15s, transform .05s;
+}
+.steps li a:hover { border-color: var(--accent); transform: translateY(-1px); }
+.steps .num {
+  font-family: var(--mono); color: var(--accent); font-weight: 700; font-size: 14px;
+  min-width: 58px;
+}
+.steps .t { color: var(--text); font-weight: 600; }
+.steps .d { color: var(--text-dim); font-size: 14px; display: block; margin-top: 2px; font-weight: 400; }
+.steps .status { margin-left: auto; font-size: 13px; }
+.status.done { color: var(--green); }
+.status.todo { color: var(--text-dim); }
+.status.wip  { color: var(--yellow); }
+
+/* step nav (bottom) */
+.step-nav { display: flex; justify-content: space-between; margin-top: 56px;
+  border-top: 1px solid var(--border); padding-top: 22px; gap: 12px; }
+.step-nav a { text-decoration: none; color: var(--text-dim); font-size: 14px; max-width: 46%; }
+.step-nav a:hover { color: var(--accent); }
+.step-nav a .dir { display: block; font-family: var(--mono); font-size: 12px; }
+.step-nav a.next { text-align: right; margin-left: auto; }
+
+/* tables */
+table { border-collapse: collapse; width: 100%; margin: 18px 0; font-size: 14.5px; }
+th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; }
+th { background: var(--bg-soft); color: var(--text-dim); font-weight: 600; }
+
+footer.site { color: var(--text-dim); font-size: 13px; text-align: center;
+  border-top: 1px solid var(--border); padding: 24px 0; }
+
+/* --- single-page additions --- */
+section[id] { scroll-margin-top: 72px; }
+
+/* top "jump" chips (optional nav for those who do click) */
+.toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; }
+.toc a {
+  font-family: var(--mono); font-size: 12.5px; text-decoration: none;
+  color: var(--text-dim); border: 1px solid var(--border); background: var(--bg-soft);
+  padding: 4px 11px; border-radius: 999px;
+}
+.toc a:hover { color: var(--accent); border-color: var(--accent); }
+
+/* step section banner inside the long page */
+.step-head {
+  display: flex; align-items: center; gap: 12px; margin: 0 0 4px;
+  border-top: 1px solid var(--border); padding-top: 40px;
+}
+.step-head .chip {
+  font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: .05em;
+  color: var(--bg); background: var(--accent); padding: 3px 10px; border-radius: 6px;
+}
+.step-head .chip.done { background: var(--green); }
+.step-head .chip.wip  { background: var(--yellow); }
+.step-head .chip.todo { background: var(--text-dim); }
+.step-head h2 { margin: 0; border: none; padding: 0; }

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BookToss v2 — Solar로 도서관 검색 AI 처음부터 만들기</title>
+<meta name="description" content="Upstage Solar로 서울 도서관 검색 AI 에이전트를 빈 폴더에서 한 걸음씩 다시 만드는 단계별 튜토리얼. 스크롤로 전부 읽을 수 있는 한 페이지.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="#top">📚 BookToss <span class="v2">v2</span></a>
+    <nav>
+      <a href="#step-0">Step 0</a>
+      <a href="#step-1">Step 1</a>
+      <a href="https://github.com/bookseal/Booktoss">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap" id="top">
+
+  <!-- ===================== HERO ===================== -->
+  <section class="hero">
+    <span class="badge">build-from-scratch · Upstage Solar</span>
+    <h1>도서관 검색 AI를<br>Solar로 처음부터 만들기</h1>
+    <p class="lead">서울 100여 개 도서관을 한 번에 검색하는 AI 에이전트를,
+      빈 폴더에서 한 걸음씩 다시 만듭니다.</p>
+    <p class="muted">이번 버전의 핵심 변화: OpenAI GPT-4o-mini 대신
+      <strong>Upstage Solar</strong>를 두뇌로 씁니다. 아래로 죽 내리면 전 과정이 한 페이지에 있습니다.</p>
+    <div class="toc">
+      <a href="#what">소개</a>
+      <a href="#why-solar">왜 Solar</a>
+      <a href="#overview">전체 그림</a>
+      <a href="#step-0">Step 0 · 깨끗한 출발점</a>
+      <a href="#step-1">Step 1 · 프로젝트 뼈대</a>
+    </div>
+  </section>
+
+  <!-- ===================== WHAT ===================== -->
+  <section id="what">
+    <h2>이게 뭔가요?</h2>
+    <p>
+      BookToss는 2025 IA×AI 해커톤에서 만든 프로젝트입니다. 서울의 각 구청 도서관 사이트는
+      제각각이고 API도 없어서, 책 한 권을 찾으려면 사이트마다 들어가 팝업을 닫고 검색을
+      반복해야 합니다. BookToss는 이 과정을 <strong>AI 에이전트가 브라우저를 직접 조작</strong>해
+      한 번에 처리합니다.
+    </p>
+    <p>
+      이 페이지는 그 프로젝트를 <strong>완전히 처음부터 다시 만드는 과정</strong>을
+      누구나 따라 할 수 있도록 단계별로 기록한 튜토리얼입니다. 각 단계마다
+      <em>무엇을</em> 했는지뿐 아니라 <em>왜</em> 그렇게 했는지를 함께 적었습니다.
+    </p>
+
+    <div class="callout">
+      <div class="label">이 문서를 보는 세 사람</div>
+      <p style="margin:0">
+        <strong>따라 하는 개발자</strong> — 명령어를 그대로 복사해 같은 결과를 재현할 수 있습니다.<br>
+        <strong>저장소를 구경하는 사람</strong> — 프로젝트가 어떻게 자랐는지 스크롤 한 번으로 봅니다.<br>
+        <strong>Claude (AI 페어)</strong> — 다음 단계를 이어갈 때 이 문서를 맥락으로 참고합니다.
+      </p>
+    </div>
+  </section>
+
+  <!-- ===================== WHY SOLAR ===================== -->
+  <section id="why-solar">
+    <h2>왜 Solar로 바꾸나요?</h2>
+    <p>
+      원본은 OpenAI GPT-4o-mini로 브라우저를 조작했습니다.
+      <a href="https://www.upstage.ai/">Upstage</a>의 <strong>Solar</strong>는
+      OpenAI 호환 엔드포인트를 제공하는 한국형 LLM이라, <strong>인터페이스를 거의 바꾸지 않고</strong>
+      두뇌만 교체할 수 있습니다. 이 교체가 얼마나 쉬운지/어디서 막히는지를 직접 겪어보는 것이
+      이 재구축의 학습 목표 중 하나입니다.
+    </p>
+    <div class="callout why">
+      <div class="label">핵심 사실</div>
+      <p style="margin:0">
+        Solar는 <code>https://api.upstage.ai/v1</code>에서 OpenAI 호환 Chat Completions를
+        제공합니다. 모델은 <code>solar-pro2</code>(31B sLLM, 빠른 chat 모드 / 추론 모드 선택 가능).
+        browser-use의 <code>ChatOpenAI</code> 래퍼에 <code>base_url</code>과 <code>api_key</code>만
+        Solar로 바꿔주면 됩니다 — 별도 어댑터가 필요 없습니다.
+      </p>
+    </div>
+  </section>
+
+  <!-- ===================== OVERVIEW ===================== -->
+  <section id="overview">
+    <h2>전체 그림 (목표 구조)</h2>
+    <table>
+      <tr><th>레이어</th><th>기술</th><th>역할</th></tr>
+      <tr><td>LLM</td><td>Upstage Solar (<code>solar-pro2</code>)</td><td>브라우저를 어떻게 조작할지 판단</td></tr>
+      <tr><td>에이전트</td><td>browser-use</td><td>각 도서관 사이트 자동 검색</td></tr>
+      <tr><td>파이프라인</td><td>LangGraph</td><td>resolve_catalog → search_book → parse_html</td></tr>
+      <tr><td>앱</td><td>Streamlit</td><td>웹 UI · 지도</td></tr>
+    </table>
+    <p class="muted">아래 단계들을 차례로 따라가면 이 구조가 한 조각씩 완성됩니다.</p>
+  </section>
+
+  <!-- ===================== STEP 0 ===================== -->
+  <section id="step-0">
+    <div class="step-head">
+      <span class="chip done">STEP 0 ✓</span>
+      <h2>깨끗한 출발점 만들기</h2>
+    </div>
+    <p class="lead" style="font-size:17px">"처음부터 다시"라면, 정말로 빈 폴더에서 시작해야 합니다.
+      단, 옛 코드는 버리지 않고 참고용으로 보존합니다.</p>
+
+    <h3>목표</h3>
+    <ul>
+      <li>기존 프로젝트 위에 덧칠하지 않고 <strong>빈 루트</strong>에서 새로 시작한다.</li>
+      <li>그러면서도 <code>main</code>의 옛 코드는 안전하게 남겨둔다.</li>
+      <li>다시 쓸 가치가 있는 자산(도서관 URL 맵, 파싱 규칙)은 손 닿는 곳에 둔다.</li>
+    </ul>
+
+    <h3>왜 새 브랜치인가, 왜 orphan인가</h3>
+    <p>
+      같은 저장소 안에서 새 시도를 하려면 새 브랜치를 파는 게 자연스럽습니다. 그래야
+      안정된 상태를 건드리지 않고 자유롭게 실험할 수 있으니까요.
+    </p>
+    <div class="callout why">
+      <div class="label">왜 일반 브랜치가 아니라 orphan?</div>
+      <p style="margin:0">
+        일반 <code>git checkout -b</code>는 기존 커밋 이력을 그대로 물려받습니다.
+        <code>--orphan</code>은 <strong>이력이 0인 브랜치</strong>를 만듭니다. 우리가 만들 첫 커밋이
+        이 브랜치의 진짜 첫 줄이 되죠. "from scratch"라는 의도와 가장 잘 맞습니다.
+      </p>
+    </div>
+
+    <h3>1. orphan 브랜치 생성</h3>
+    <pre><code>git checkout --orphan v2-solar
+git reset           <span class="comment"># 옛 파일들을 스테이지에서 내려놓음 (작업트리는 그대로)</span></code></pre>
+
+    <h3>2. 옛 코드를 docs/v1/ 로 이동</h3>
+    <pre><code>mkdir -p docs/v1
+git mv 00_src README.md app.py requirements.txt docs/v1/
+mv "BookToss_시연영상2.mp4" *.hwp *.pdf docs/v1/   <span class="comment"># 추적 안 되던 자료들도 함께</span></code></pre>
+    <div class="callout">
+      <div class="label">왜 지우지 않고 옮기나</div>
+      <p style="margin:0">
+        재구축의 두 핵심 자산 — 서울 도서관 100여 곳의 포털 URL을 담은
+        <code>catalog_index.yaml</code>, 그리고 구청 사이트별 HTML 파싱 규칙 — 은 처음부터
+        다시 만들 필요가 없습니다. 바퀴를 재발명하지 않고 "참고해서 골라 옮기는" 것이
+        현명한 재시작입니다.
+      </p>
+    </div>
+
+    <h3>3. 큰 바이너리는 git에서 제외</h3>
+    <pre><code><span class="comment"># .gitignore</span>
+.env
+__pycache__/
+docs/v1/*.mp4
+docs/v1/*.hwp
+docs/v1/*.pdf
+docs/v1/00_src/data/raw/</code></pre>
+
+    <h3>4. 출발점 커밋</h3>
+    <pre><code>git add -A
+git commit -m "chore: start v2-solar from scratch; archive v1 under docs/v1"</code></pre>
+
+    <h3>결과</h3>
+    <pre class="tree"><code>repo 루트
+├── README.md          <span class="comment">← v2 의도 + 진행표</span>
+├── .gitignore         <span class="comment">← .env, 캐시, 큰 미디어 제외</span>
+└── docs/
+    ├── index.html     <span class="comment">← 지금 보고 있는 이 페이지</span>
+    └── v1/            <span class="comment">← 기존 해커톤 프로젝트 통째로 보존</span>
+        └── 00_src/configs/catalog_index.yaml  <span class="comment">← 나중에 재활용</span></code></pre>
+
+    <div class="callout insight">
+      <div class="label">짚고 갈 점</div>
+      <p style="margin:0">
+        같은 저장소 안에 두 개의 독립된 역사가 공존하다가, 재구축 결과가 무르익으면
+        <code>main</code>으로 합쳐집니다. 옛 코드는 <code>docs/v1/</code>에 박제되어 사라지지 않습니다.
+      </p>
+    </div>
+  </section>
+
+  <!-- ===================== STEP 1 ===================== -->
+  <section id="step-1">
+    <div class="step-head">
+      <span class="chip todo">STEP 1</span>
+      <h2>프로젝트 뼈대 세우기</h2>
+    </div>
+    <p class="lead" style="font-size:17px">🚧 진행 예정. Step 0의 빈 루트 위에 코드가 들어갈 자리를 잡습니다.</p>
+    <p>다룰 내용:</p>
+    <ul>
+      <li><code>src/</code> 디렉토리 레이아웃 — <code>llm · nodes · graph</code> 분리</li>
+      <li><code>requirements.txt</code> — browser-use, langgraph, streamlit 등</li>
+      <li><code>.env.example</code> — <code>UPSTAGE_API_KEY</code> 등 환경변수 틀</li>
+    </ul>
+    <p class="muted">이 단계가 끝나면 이 자리에 명령어와 설명이 채워집니다.</p>
+  </section>
+
+</main>
+
+<footer class="site">
+  BookToss v2 · <a href="https://github.com/bookseal/Booktoss">bookseal/Booktoss</a> ·
+  단계가 진행될 때마다 이 페이지가 자동으로 갱신됩니다
+</footer>
+
+</body>
+</html>
