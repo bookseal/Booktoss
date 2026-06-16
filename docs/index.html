@@ -13,8 +13,8 @@
   <div class="wrap">
     <a class="brand" href="#top">📚 BookToss <span class="v2">v2</span></a>
     <nav>
-      <a href="#step-0">Step 0</a>
-      <a href="#step-1">Step 1</a>
+      <a href="#roadmap">로드맵</a>
+      <a href="#step-0">사전 준비</a>
       <a href="https://github.com/bookseal/Booktoss">GitHub</a>
     </nav>
   </div>
@@ -34,8 +34,8 @@
       <a href="#what">소개</a>
       <a href="#why-solar">왜 Solar</a>
       <a href="#overview">전체 그림</a>
-      <a href="#step-0">Step 0 · 깨끗한 출발점</a>
-      <a href="#step-1">Step 1 · 프로젝트 뼈대</a>
+      <a href="#roadmap">로드맵 v0.0.1→v0.1.0</a>
+      <a href="#step-0">사전 준비</a>
     </div>
   </section>
 
@@ -95,7 +95,42 @@
       <tr><td>파이프라인</td><td>LangGraph</td><td>resolve_catalog → search_book → parse_html</td></tr>
       <tr><td>앱</td><td>Streamlit</td><td>웹 UI · 지도</td></tr>
     </table>
-    <p class="muted">아래 단계들을 차례로 따라가면 이 구조가 한 조각씩 완성됩니다.</p>
+    <p class="muted">아래 로드맵을 차례로 따라가면 이 구조가 한 조각씩 완성됩니다.</p>
+  </section>
+
+  <!-- ===================== ROADMAP ===================== -->
+  <section id="roadmap">
+    <h2>로드맵 — v0.0.1 → v0.1.0</h2>
+    <p>
+      "한 번에 다 만들기"는 막히면 어디서 틀어졌는지 알 수 없습니다. 그래서
+      <strong>각 버전이 끝나면 눈으로 확인할 수 있는 결과물</strong>이 남도록 10개의 작은
+      단계로 쪼갰습니다. <code>v0.1.0</code>의 목표는 거창하지 않습니다 —
+      <strong>도서관 딱 한 곳에서 책 한 권을 검색해 결과를 화면에 띄우는 것</strong>.
+      그 한 줄기 흐름(end-to-end)이 통하면 나머지는 도서관을 늘리는 일입니다.
+    </p>
+
+    <table class="roadmap">
+      <tr><th>버전</th><th>이 버전이 끝나면…</th><th>핵심 기술</th><th>상태</th></tr>
+      <tr class="next"><td>v0.0.1</td><td class="goal">Streamlit "Hello, BookToss" 화면이 브라우저에 뜬다</td><td>Streamlit</td><td class="st">⏳ 다음</td></tr>
+      <tr><td>v0.0.2</td><td class="goal">터미널에서 Solar API에 첫 호출이 성공한다</td><td>Upstage Solar · .env</td><td class="st">예정</td></tr>
+      <tr><td>v0.0.3</td><td class="goal">Streamlit 입력창에 쓰면 Solar의 답이 화면에 나온다</td><td>Streamlit + Solar</td><td class="st">예정</td></tr>
+      <tr><td>v0.0.4</td><td class="goal">코드를 <code>src/</code> 구조로 정리한다 (llm·nodes·graph 분리)</td><td>패키지 레이아웃</td><td class="st">예정</td></tr>
+      <tr><td>v0.0.5</td><td class="goal">Playwright로 브라우저를 열고 어떤 페이지의 제목을 읽어온다</td><td>Playwright</td><td class="st">예정</td></tr>
+      <tr><td>v0.0.6</td><td class="goal">설정에서 도서관 한 곳의 검색 URL을 찾아낸다 (resolve_catalog)</td><td>YAML · LangGraph 노드</td><td class="st">예정</td></tr>
+      <tr><td>v0.0.7</td><td class="goal">그 도서관 페이지에서 검색창을 찾아 책 제목을 입력·제출한다</td><td>Playwright</td><td class="st">예정</td></tr>
+      <tr><td>v0.0.8</td><td class="goal">Solar가 페이지를 보고 "어떻게 검색할지"를 판단한다</td><td>Solar + 브라우저 제어</td><td class="st">예정</td></tr>
+      <tr><td>v0.0.9</td><td class="goal">검색 결과 HTML에서 책 정보(제목·저자·대출가능)를 뽑아낸다</td><td>BeautifulSoup (parse_html)</td><td class="st">예정</td></tr>
+      <tr class="target"><td>v0.1.0</td><td class="goal">🎉 도서관 1곳 end-to-end: 검색어 입력 → 결과를 화면에 표시</td><td>전체 통합</td><td class="st">🎯 목표</td></tr>
+    </table>
+
+    <div class="callout insight">
+      <div class="label">이 로드맵을 읽는 법</div>
+      <p style="margin:0">
+        위로 갈수록 "기반 다지기"(UI·API·구조), 아래로 갈수록 "실제 도서관 다루기"입니다.
+        각 줄은 독립적으로 동작하는 작은 마일스톤이라, 하나씩 PR로 머지하며 진행합니다.
+        진행하면서 이 표의 상태가 ✅로 바뀌고, 해당 버전의 상세 섹션이 이 아래에 채워집니다.
+      </p>
+    </div>
   </section>
 
   <!-- ===================== STEP 0 ===================== -->
@@ -177,20 +212,16 @@ git commit -m "chore: start v2-solar from scratch; archive v1 under docs/v1"</co
     </div>
   </section>
 
-  <!-- ===================== STEP 1 ===================== -->
-  <section id="step-1">
+  <!-- ===================== NEXT UP ===================== -->
+  <section id="next">
     <div class="step-head">
-      <span class="chip todo">STEP 1</span>
-      <h2>프로젝트 뼈대 세우기</h2>
+      <span class="chip wip">다음 차례</span>
+      <h2>v0.0.1 · Streamlit "Hello, BookToss"</h2>
     </div>
-    <p class="lead" style="font-size:17px">🚧 진행 예정. Step 0의 빈 루트 위에 코드가 들어갈 자리를 잡습니다.</p>
-    <p>다룰 내용:</p>
-    <ul>
-      <li><code>src/</code> 디렉토리 레이아웃 — <code>llm · nodes · graph</code> 분리</li>
-      <li><code>requirements.txt</code> — browser-use, langgraph, streamlit 등</li>
-      <li><code>.env.example</code> — <code>UPSTAGE_API_KEY</code> 등 환경변수 틀</li>
-    </ul>
-    <p class="muted">이 단계가 끝나면 이 자리에 명령어와 설명이 채워집니다.</p>
+    <p class="lead" style="font-size:17px">🚧 곧 시작합니다. 첫 결과물은 거창하지 않습니다 —
+      브라우저에 화면 하나를 띄우는 것.</p>
+    <p>이 버전이 끝나면 이 자리에 명령어와 설명, 그리고 막혔던 지점이 채워집니다.
+      그다음은 로드맵을 따라 <code>v0.0.2</code>(Solar 연결)로 이어집니다.</p>
   </section>
 
 </main>

@@ -145,3 +145,10 @@ section[id] { scroll-margin-top: 72px; }
 .step-head .chip.wip  { background: var(--yellow); }
 .step-head .chip.todo { background: var(--text-dim); }
 .step-head h2 { margin: 0; border: none; padding: 0; }
+
+/* roadmap table */
+table.roadmap td:first-child { font-family: var(--mono); color: var(--accent); white-space: nowrap; }
+table.roadmap td.goal { font-weight: 600; color: var(--text); }
+table.roadmap .st { white-space: nowrap; font-size: 13px; }
+table.roadmap tr.target td { background: rgba(93,214,160,.06); }
+table.roadmap tr.next td:first-child { color: var(--yellow); }
