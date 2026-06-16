@@ -119,3 +119,29 @@ th { background: var(--bg-soft); color: var(--text-dim); font-weight: 600; }
 
 footer.site { color: var(--text-dim); font-size: 13px; text-align: center;
   border-top: 1px solid var(--border); padding: 24px 0; }
+
+/* --- single-page additions --- */
+section[id] { scroll-margin-top: 72px; }
+
+/* top "jump" chips (optional nav for those who do click) */
+.toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; }
+.toc a {
+  font-family: var(--mono); font-size: 12.5px; text-decoration: none;
+  color: var(--text-dim); border: 1px solid var(--border); background: var(--bg-soft);
+  padding: 4px 11px; border-radius: 999px;
+}
+.toc a:hover { color: var(--accent); border-color: var(--accent); }
+
+/* step section banner inside the long page */
+.step-head {
+  display: flex; align-items: center; gap: 12px; margin: 0 0 4px;
+  border-top: 1px solid var(--border); padding-top: 40px;
+}
+.step-head .chip {
+  font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: .05em;
+  color: var(--bg); background: var(--accent); padding: 3px 10px; border-radius: 6px;
+}
+.step-head .chip.done { background: var(--green); }
+.step-head .chip.wip  { background: var(--yellow); }
+.step-head .chip.todo { background: var(--text-dim); }
+.step-head h2 { margin: 0; border: none; padding: 0; }
