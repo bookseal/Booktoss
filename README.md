@@ -7,6 +7,16 @@ This branch (`v2-solar`) starts from an empty root and is built one step at a ti
 as a learning exercise. The original hackathon project is preserved for reference
 under [`docs/v1/`](docs/v1/).
 
+## 📖 Follow along — step-by-step tutorial
+
+Every step is written up so **anyone can reproduce this project from scratch**.
+
+- **Live site (GitHub Pages):** https://bookseal.github.io/Booktoss/
+- **Read locally:** open [`docs/index.html`](docs/index.html) in a browser
+
+The tutorial doubles as shared context: the developer follows it, repo visitors
+read it, and Claude (the AI pair) uses it to pick up the next step.
+
 ## Status
 
 🚧 Building. See progress below.
