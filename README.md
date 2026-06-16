@@ -3,23 +3,6 @@
 > Rebuild from scratch — searching 100+ Seoul libraries at once with an AI agent,
 > this time powered by **Upstage Solar** instead of OpenAI.
 
----
-
-## 👉 전체 과정은 한 페이지로 정리돼 있습니다
-
-### **▶︎ https://bookseal.github.io/Booktoss/**
-
-빈 폴더에서 시작해 도서관 검색 AI를 한 걸음씩 완성하는 **단계별 튜토리얼**입니다.
-스크롤 한 번으로 전 과정을 읽을 수 있고, 명령어를 그대로 따라 하면 누구나 재현할 수 있습니다.
-각 단계마다 *무엇을* 했는지뿐 아니라 ***왜*** 그렇게 했는지를 적었습니다.
-
-> 이 README는 입구일 뿐입니다. **실제 내용·코드·설명은 위 페이지에 있습니다.**
-> 개발자도, 저장소를 구경하는 사람도, AI 페어(Claude)도 모두 이 페이지를 봅니다.
-
-[![튜토리얼 보러 가기](https://img.shields.io/badge/📖_튜토리얼_보러_가기-bookseal.github.io%2FBooktoss-6ea8fe?style=for-the-badge)](https://bookseal.github.io/Booktoss/)
-
----
-
 ## 한눈에
 
 | | |
@@ -29,14 +12,27 @@
 | **스택(목표)** | Solar · browser-use · LangGraph · Streamlit |
 | **방식** | 빈 루트에서 한 step씩 — 과정을 전부 문서화 |
 
+## 📖 전 과정을 한 페이지 튜토리얼로 정리했습니다
+
+빈 폴더에서 시작해 도서관 검색 AI를 완성하기까지, **무엇을** 했는지뿐 아니라
+***왜*** 그렇게 했는지를 한 페이지에 죽 적었습니다. 예를 들면:
+
+- 🌱 **왜 `git checkout --orphan`으로 시작했나** — "처음부터"를 진짜 0에서 만드는 법
+- 🔁 **OpenAI → Solar, 코드를 거의 안 바꾸고 두뇌만 교체하는 트릭** (`base_url` 하나)
+- 🤖 **browser-use가 LLM으로 도서관 사이트를 직접 클릭·검색하는 원리**
+- 🧩 **LangGraph 파이프라인** — `resolve_catalog → search_book → parse_html`
+- 🛠️ **막혔던 지점들** — Pages가 옛 커밋만 배포하던 문제 같은 실전 디버깅까지
+
+명령어를 그대로 복사하면 누구나 재현할 수 있습니다.
+
+[![튜토리얼 보러 가기](https://img.shields.io/badge/📖_튜토리얼_보러_가기-bookseal.github.io%2FBooktoss-6ea8fe?style=for-the-badge)](https://bookseal.github.io/Booktoss/)
+
 ## 진행 상황
 
 | Step | 내용 | 상태 |
 |------|------|------|
 | 0 | 깨끗한 출발점 — orphan 시작, v1을 `docs/v1/`에 보존 | ✅ |
 | 1 | 프로젝트 뼈대 (`src/` 레이아웃 · 의존성 · 환경변수) | ⏳ |
-
-전체 설명은 → **https://bookseal.github.io/Booktoss/**
 
 ## v1 원본 (참고용)
 
