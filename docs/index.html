@@ -111,8 +111,8 @@
 
     <table class="roadmap">
       <tr><th>버전</th><th>이 버전이 끝나면…</th><th>핵심 기술</th><th>상태</th></tr>
-      <tr class="next"><td>v0.0.1</td><td class="goal">Streamlit "Hello, BookToss" 화면이 브라우저에 뜬다</td><td>Streamlit</td><td class="st">⏳ 다음</td></tr>
-      <tr><td>v0.0.2</td><td class="goal">터미널에서 Solar API에 첫 호출이 성공한다</td><td>Upstage Solar · .env</td><td class="st">예정</td></tr>
+      <tr><td>v0.0.1</td><td class="goal">Streamlit "Hello, BookToss" 화면이 브라우저에 뜬다</td><td>Streamlit</td><td class="st">✅ 완료</td></tr>
+      <tr class="next"><td>v0.0.2</td><td class="goal">터미널에서 Solar API에 첫 호출이 성공한다</td><td>Upstage Solar · .env</td><td class="st">⏳ 다음</td></tr>
       <tr><td>v0.0.3</td><td class="goal">Streamlit 입력창에 쓰면 Solar의 답이 화면에 나온다</td><td>Streamlit + Solar</td><td class="st">예정</td></tr>
       <tr><td>v0.0.4</td><td class="goal">코드를 <code>src/</code> 구조로 정리한다 (llm·nodes·graph 분리)</td><td>패키지 레이아웃</td><td class="st">예정</td></tr>
       <tr><td>v0.0.5</td><td class="goal">Playwright로 브라우저를 열고 어떤 페이지의 제목을 읽어온다</td><td>Playwright</td><td class="st">예정</td></tr>
@@ -212,16 +212,82 @@ git commit -m "chore: start v2-solar from scratch; archive v1 under docs/v1"</co
     </div>
   </section>
 
-  <!-- ===================== NEXT UP ===================== -->
-  <section id="next">
+  <!-- ===================== v0.0.1 ===================== -->
+  <section id="v0-0-1">
     <div class="step-head">
-      <span class="chip wip">다음 차례</span>
-      <h2>v0.0.1 · Streamlit "Hello, BookToss"</h2>
+      <span class="chip done">v0.0.1 · 완료 ✓</span>
+      <h2>Streamlit "Hello, BookToss"</h2>
     </div>
-    <p class="lead" style="font-size:17px">🚧 곧 시작합니다. 첫 결과물은 거창하지 않습니다 —
-      브라우저에 화면 하나를 띄우는 것.</p>
-    <p>이 버전이 끝나면 이 자리에 명령어와 설명, 그리고 막혔던 지점이 채워집니다.
-      그다음은 로드맵을 따라 <code>v0.0.2</code>(Solar 연결)로 이어집니다.</p>
+    <p class="lead" style="font-size:17px">첫 결과물은 거창하지 않습니다 —
+      브라우저에 화면 하나를 띄우는 것. 이후 모든 단계의 결과를 볼 자리를 먼저 만듭니다.</p>
+
+    <h3>왜 UI를 가장 먼저?</h3>
+    <p>
+      Solar 응답도, 도서관 검색 결과도, 결국 어딘가에 <em>보여줘야</em> 합니다. 화면을 먼저
+      세워두면 다음 단계부터는 <code>print</code> 대신 실제 화면으로 결과를 확인할 수 있습니다.
+      <a href="https://streamlit.io/">Streamlit</a>은 파이썬 스크립트 하나로 웹 UI를 그려주는
+      도구라, 가장 빠르게 "보이는 것"을 만들 수 있습니다.
+    </p>
+
+    <h3>1. Streamlit 설치</h3>
+    <pre><code><span class="comment"># requirements.txt</span>
+streamlit
+
+<span class="comment"># 설치</span>
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt</code></pre>
+
+    <h3>2. app.py — 화면의 뼈대</h3>
+    <p>페이지 설정과 제목까지는 정해진 틀입니다. 그 아래 <strong>첫 화면 본문</strong>은
+      직접 채워봅니다 (아래 "직접 해보기").</p>
+    <pre><code><span class="comment"># app.py</span>
+import streamlit as st
+
+st.set_page_config(page_title="BookToss", page_icon="📚", layout="centered")
+st.title("📚 BookToss")
+st.caption("서울 도서관을 한 번에 검색하는 AI 에이전트 · v0.0.1")
+
+<span class="comment"># 👉 여기에 첫 화면 본문을 직접 채웁니다 (TODO(human))</span></code></pre>
+
+    <h3>3. 실행</h3>
+    <pre><code>streamlit run app.py
+<span class="comment"># 브라우저가 자동으로 http://localhost:8501 을 엽니다</span></code></pre>
+
+    <div class="callout insight">
+      <div class="label">Streamlit 실행 모델 (알아두면 좋은 점)</div>
+      <p style="margin:0">
+        <code>streamlit run</code>은 스크립트를 위→아래로 <strong>통째로 다시 실행</strong>하며
+        화면을 그립니다. 위젯과 상호작용할 때마다 전체가 재실행돼요. 그래서 "상태"는 보통
+        <code>st.session_state</code>로 따로 관리합니다 — 지금은 몰라도 되고, v0.0.3에서 만납니다.
+      </p>
+    </div>
+
+    <h3>첫 화면에 뭘 보여줄까 — 이렇게 채웠습니다</h3>
+    <p>
+      "무엇이 보일지"를 정하는 자리입니다. 이번엔 한 줄 소개 + 책 제목 입력칸 + 검색 버튼을
+      뒀습니다. 버튼 로직은 아직 진짜 검색이 아니라 "다음 버전에서 연결된다"는 안내만 합니다 —
+      이 입력칸과 버튼이 <code>v0.1.0</code>의 실제 검색창으로 자랍니다.
+    </p>
+    <pre><code>st.write("서울 곳곳의 도서관을 **한 번에** 검색하는 AI 에이전트입니다. 찾는 책을 입력해 보세요.")
+
+book = st.text_input("찾는 책 제목", placeholder="예: 코스모스")
+if st.button("검색", type="primary"):
+    if book:
+        st.info(f"'{book}' 검색은 다음 버전에서 연결됩니다. (지금은 화면만!)")
+    else:
+        st.warning("책 제목을 입력해 주세요.")</code></pre>
+
+    <div class="callout why">
+      <div class="label">막혔던 지점</div>
+      <p style="margin:0">
+        없었습니다 — <code>streamlit run app.py</code> 한 번에 화면이 떴습니다. Streamlit이
+        "파이썬만으로 가장 빠르게 보이는 것"을 만들어주는 이유죠. (앞으로 막히는 단계가 나오면
+        이 칸에 솔직히 기록합니다.)
+      </p>
+    </div>
+
+    <p class="muted">✅ <strong>v0.0.1 완료</strong> — 화면이 뜬다. 다음은
+      <code>v0.0.2</code> · Solar API 연결.</p>
   </section>
 
 </main>
