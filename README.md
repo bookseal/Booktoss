@@ -12,6 +12,16 @@
 | **스택(목표)** | Solar · browser-use · LangGraph · Streamlit |
 | **방식** | 빈 루트에서 한 step씩 — 과정을 전부 문서화 |
 
+## How it works
+
+```mermaid
+flowchart LR
+  Q[Book title] --> AG[Solar agent]
+  AG --> L[Search 100+ libraries · parallel]
+  L --> P[Parse availability]
+  P --> U[Unified result + map]
+```
+
 ## 📖 전 과정을 한 페이지 튜토리얼로 정리했습니다
 
 빈 폴더에서 시작해 도서관 검색 AI를 완성하기까지, **무엇을** 했는지뿐 아니라
