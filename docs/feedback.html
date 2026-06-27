@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Upstage Solar 제품 피드백 — BookToss 빌드 노트</title>
+<meta name="description" content="Upstage Solar로 도서관 검색 AI(BookToss)를 빈 폴더에서 만들며 직접 사용한 경험 기반의 구조화된 제품 피드백. 각 항목에 commit·issue 증거 링크 포함.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html">📚 BookToss <span class="v2">v2</span></a>
+    <nav>
+      <a href="index.html">튜토리얼</a>
+      <a href="https://github.com/bookseal/Booktoss">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap" id="top">
+
+  <!-- ===================== HERO ===================== -->
+  <section class="hero">
+    <span class="badge">product feedback · Upstage Solar</span>
+    <h1>Solar를 써보며<br>남긴 제품 피드백</h1>
+    <p class="lead">도서관 검색 AI(BookToss)를 <strong>Upstage Solar</strong> 위에서
+      빈 폴더부터 만들며, 직접 부딪힌 경험을 구조화된 피드백으로 정리했습니다.</p>
+    <p class="muted">모든 항목은 <strong>실제 작업 기록(commit·issue)</strong>에 연결돼 있어
+      재현·검증할 수 있습니다. 비공개 raw 로그(<code>upstage-notes.md</code>)에서
+      검증된 인상만 골라 옮겼습니다.</p>
+  </section>
+
+  <!-- ===================== TL;DR ===================== -->
+  <section id="tldr">
+    <div class="callout insight">
+      <div class="label">한 줄 요약</div>
+      <p style="margin:0">OpenAI 호환 설계 덕에 <strong>진입 마찰이 거의 0</strong>이었고
+        (카드 등록 없이 키 발급 → <code>base_url</code> 한 줄 교체로 첫 호출 성공),
+        Chat/Reasoning은 짧은 단발 질문에서도 <strong>그럴듯하게 잘 추측</strong>했습니다.
+        다만 "그게 추측"임을 모델이 표시하지 못하는 지점이 있었고, 이는 Upstage가 이미
+        <strong>Groundedness Check</strong>로 풀고 있는 문제와 맞닿아 있었습니다.</p>
+    </div>
+  </section>
+
+  <!-- ===================== 1. Console / DX ===================== -->
+  <section id="dx">
+    <h2>1. Console / 개발자 경험 (DX)</h2>
+    <p><strong>관찰.</strong> Upstage Console에서 <code>UPSTAGE_API_KEY</code> 발급이
+      막힘없이 끝났습니다. 특히 <strong>신용카드 정보 입력 없이</strong> 키가 나왔습니다.</p>
+
+    <div class="callout">
+      <div class="label">좋았던 점</div>
+      <p style="margin:0">결제수단 등록은 "일단 한번 써볼까"를 가장 크게 가로막는 단계인데,
+        그게 없으니 발급 → 첫 호출까지의 심리적 장벽이 거의 사라졌습니다. OpenAI 등 다른
+        LLM 콘솔에서 카드 등록에 멈칫했던 경험과 분명히 대비됐습니다.</p>
+    </div>
+
+    <p><strong>그리고 OpenAI 호환.</strong> 새 SDK를 배울 필요 없이
+      기존 <code>openai</code> 라이브러리에 <code>base_url</code> 한 줄만 바꿔 붙였습니다.
+      OpenAI 사용 경험이 있으면 학습 비용이 사실상 0이었습니다.</p>
+
+    <pre><code>from openai import OpenAI
+client = OpenAI(
+    api_key=os.getenv("UPSTAGE_API_KEY"),
+    base_url="https://api.upstage.ai/v1",   # 이 한 줄이 전부
+)
+resp = client.chat.completions.create(
+    model="solar-pro2",
+    messages=[{"role": "user", "content": prompt}],
+)</code></pre>
+
+    <p class="muted">증거: <a href="https://github.com/bookseal/Booktoss/pull/9">PR #9</a>
+      · <a href="https://github.com/bookseal/Booktoss/blob/main/solar.py"><code>solar.py</code></a></p>
+  </section>
+
+  <!-- ===================== 2. Chat / Reasoning ===================== -->
+  <section id="chat">
+    <h2>2. Chat / Reasoning (solar-pro2)</h2>
+    <p><strong>관찰.</strong> 첫 호출로 아직 <em>출시되지 않은</em> 서비스
+      "BookToss"를 한 문장으로 소개해 달라고 시켰습니다. 모델은 준 단서(이름 +
+      "도서관 검색 서비스")만으로 자연스러운 한 문장 카피를 생성했습니다.</p>
+
+    <div class="callout">
+      <div class="label">좋았던 점</div>
+      <p style="margin:0"><strong>추측 자체는 훌륭했습니다.</strong> 이름 "BookToss"(Book + Toss)에
+        담긴 의미를 합리적으로 읽어, 존재하지 않는 서비스인데도 그럴듯한 소개를 만들어냈습니다.
+        한국어 표현도 매끄러웠습니다.</p>
+    </div>
+
+    <div class="callout why">
+      <div class="label">아쉬웠던 점 / 관찰된 한계</div>
+      <p style="margin:0">잘 맞혔지만, <strong>그게 "추측"이라는 사실을 스스로 표시하지 못했습니다.</strong>
+        근거가 주어지지 않은 단발 질문에서도 확신하는 어조로 답합니다. 이는 특정 모델의 결함이라기보다,
+        평가 방식이 "모르겠다"보다 "그럴듯한 추측"을 보상해 온 LLM 일반의 알려진 성질에 가깝습니다
+        (OpenAI <em>Why Language Models Hallucinate</em>, 2025).</p>
+    </div>
+
+    <p class="muted">증거: <a href="https://github.com/bookseal/Booktoss/issues/7">issue #7</a>
+      · 머지 커밋 <a href="https://github.com/bookseal/Booktoss/commit/25db28c"><code>25db28c</code></a></p>
+  </section>
+
+  <!-- ===================== 3. Open Question ===================== -->
+  <section id="open-question">
+    <h2>3. 제품팀에 드리는 열린 질문</h2>
+    <p>위 한계를 알아보다가, Upstage가 바로 그 문제를 <strong>제품으로</strong> 이미
+      풀고 있다는 걸 발견했습니다 — <strong>Groundedness Check API</strong>는
+      (context, answer) 쌍이 실제로 근거에 뒷받침되는지 외부에서 채점합니다.
+      "추측을 추측이라 표시하지 못하는" 문제를, 모델 안이 아니라 바깥의 검증기로 푸는 접근입니다.</p>
+
+    <div class="callout insight">
+      <div class="label">Open Question</div>
+      <p style="margin:0 0 8px"><strong>① </strong><code>solar-pro2</code> 자체에 abstention(불확실하면 "모르겠다")
+        또는 verbalized-confidence(헤지 표현) 방향이 내장돼 가는지, 아니면 Groundedness Check를
+        별도로 붙이는 것이 권장 경로인지 궁금합니다.</p>
+      <p style="margin:0"><strong>② </strong>근거가 없는 짧은 단발 프롬프트에서, 모델이 스스로
+        "이건 근거 없는 추측"이라고 신호를 주는 방향의 계획이 있는지 궁금합니다.</p>
+    </div>
+
+    <p class="muted">참고: <a href="https://console.upstage.ai/docs/capabilities/groundedness-checking">Upstage Groundedness Check 문서</a>
+      · <a href="https://www.upstage.ai/blog/en/llm-rag-groundedness-check">(Almost) Zero hallucination with RAG and Groundedness Check</a></p>
+  </section>
+
+  <!-- ===================== 맥락 ===================== -->
+  <section id="context">
+    <h2>이 피드백이 나온 맥락</h2>
+    <p>BookToss는 서울 100여 개 도서관을 한 번에 검색하는 AI 에이전트를, Solar를 두뇌로
+      빈 폴더부터 버전 단위로 쌓아가는 프로젝트입니다. 위 인상들은 <code>v0.0.2</code>(Solar
+      첫 터미널 호출) 작업 중 실제로 받은 것이며, 더 깊은 사용(Streamlit 연동, RAG)으로
+      가며 계속 갱신할 예정입니다.</p>
+    <p class="muted"><a href="index.html">→ BookToss 전체 빌드 튜토리얼 보기</a></p>
+  </section>
+
+  <footer class="muted" style="margin-top:48px;font-size:13px">
+    <hr>
+    <p>BookToss v2 · Upstage Solar 빌드 노트 ·
+      <a href="https://github.com/bookseal/Booktoss">github.com/bookseal/Booktoss</a></p>
+  </footer>
+
+</main>
+</body>
+</html>
