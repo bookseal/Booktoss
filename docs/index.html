@@ -290,6 +290,64 @@ if st.button("검색", type="primary"):
       <code>v0.0.2</code> · Solar API 연결.</p>
   </section>
 
+  <!-- ===================== v0.0.2 ===================== -->
+  <section id="v0-0-2">
+    <div class="step-head">
+      <span class="chip wip">v0.0.2 · 진행 중</span>
+      <h2>Solar API 연결</h2>
+    </div>
+    <p class="lead" style="font-size:17px">두뇌를 붙입니다. 터미널에서 Solar에 한 마디
+      건네고 답이 오는지 확인 — 이게 되면 이후 모든 LLM 단계의 토대가 섭니다.</p>
+
+    <h3>핵심: Solar는 OpenAI 호환</h3>
+    <p>
+      Solar 전용 SDK는 필요 없습니다. 표준 <code>openai</code> 파이썬 SDK에서
+      <strong><code>base_url</code>과 <code>api_key</code>만 Solar로</strong> 바꾸면 됩니다.
+      덕분에 LangChain·browser-use 같은 OpenAI 생태계 도구를 그대로 재사용할 수 있어요.
+    </p>
+    <table>
+      <tr><th>항목</th><th>값</th></tr>
+      <tr><td>base_url</td><td><code>https://api.upstage.ai/v1</code></td></tr>
+      <tr><td>모델</td><td><code>solar-pro2</code></td></tr>
+      <tr><td>API 키 (env)</td><td><code>UPSTAGE_API_KEY</code> — <a href="https://console.upstage.ai">console.upstage.ai</a>에서 발급</td></tr>
+    </table>
+
+    <h3>1. 의존성 + 키 보관</h3>
+    <pre><code><span class="comment"># requirements.txt 에 추가</span>
+openai
+python-dotenv
+
+pip install -r requirements.txt</code></pre>
+    <p>키는 코드에 박지 않고 <code>.env</code>에 둡니다. <code>.env</code>는 git에 올리지 않고
+      (<code>.gitignore</code>에 포함), 대신 빈 틀 <code>.env.example</code>을 커밋해 둡니다.</p>
+    <pre><code><span class="comment"># .env  (git에 올리지 않음)</span>
+UPSTAGE_API_KEY=up_여기에_본인_키</code></pre>
+
+    <h3>2. solar.py — 클라이언트와 호출</h3>
+    <p><code>load_dotenv()</code>가 <code>.env</code>의 값을 환경변수로 불러오고, 그 키로
+      OpenAI 클라이언트를 Solar에 연결합니다. 실제 <strong>호출 한 줄</strong>은 직접 채웁니다.</p>
+    <pre><code>from openai import OpenAI
+from dotenv import load_dotenv
+load_dotenv()
+
+client = OpenAI(api_key=KEY, base_url="https://api.upstage.ai/v1")
+
+<span class="comment"># 👉 chat 호출은 직접 (TODO(human))</span>
+resp = client.chat.completions.create(model="solar-pro2", messages=[...])</code></pre>
+
+    <h3>3. 실행</h3>
+    <pre><code>python solar.py
+<span class="comment"># Solar: 안녕하세요, 저는 ...  ← 이런 응답이 뜨면 성공</span></code></pre>
+
+    <div class="callout why">
+      <div class="label">막혔던 지점</div>
+      <p style="margin:0">(구현 후 채워집니다 — 키 오타, base_url 누락, 모델명 등 자주 막히는 자리.)</p>
+    </div>
+
+    <p class="muted">⏳ 진행 중. 응답이 오면 v0.0.2 완료. 다음은
+      <code>v0.0.3</code> · Streamlit 입력 → Solar 응답 표시.</p>
+  </section>
+
 </main>
 
 <footer class="site">
